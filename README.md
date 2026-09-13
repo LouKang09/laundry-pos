@@ -4,7 +4,7 @@ React + Vite, Node.js + Express, PostgreSQL and Prisma. One web service serves t
 
 ## Delivery status
 
-See [VALIDATION.md](VALIDATION.md) for actual verification results and deployment blockers. A configured deployment is not a live deployment. No production URL or production account exists until Railway provisioning completes.
+Production: [Open Laundry POS](https://laundry-pos-web-production.up.railway.app/). Source: [development branch](https://github.com/LouKang09/laundry-pos/tree/dev/complete-laundry-pos). See [VALIDATION.md](VALIDATION.md) for verification results, deployment details and limits. Complete the protected first-admin setup below to choose your own credentials.
 
 ## Start locally
 
