@@ -60,7 +60,7 @@ Use the repository root as the service root directory. Do **not** deploy `client
 1. Push branch `dev/complete-laundry-pos` to `LouKang09/laundry-pos` and connect that repository to Railway.
 2. Create a project named `laundry-pos` in your intended Railway workspace.
 3. Add Railway PostgreSQL with a persistent volume. Use Railway's PostgreSQL provisioning rather than an ephemeral Docker container without a volume.
-4. Add a web service from the GitHub development branch. Railway detects the root `Dockerfile` and `railway.json`.
+4. Add a web service from the GitHub development branch. Set the Dockerfile path to `Dockerfile`, start command to `sh server/start-production.sh`, healthcheck path to `/health`, timeout to 120 seconds, and restart policy to `ON_FAILURE` with 10 retries. These settings are configured on the deployed service. The Dockerfile also uses the same startup command by default.
 5. Generate a public domain for the web service and configure its variables:
 
 | Variable | Production value |
@@ -73,8 +73,8 @@ Use the repository root as the service root directory. Do **not** deploy `client
 
 Do not put production connection strings or credentials in GitHub. No database credentials go to the React bundle. Same-origin deployment avoids cross-domain session and CORS problems.
 
-6. `railway.json` runs `npm run db:migrate` and `npm run db:seed` as pre-deploy commands. Migration uses **prisma migrate deploy**, not `db push` or a destructive reset. Seed upserts preserve existing data and prices.
-7. Confirm `/health` returns HTTP 200 with `database: connected`. It returns HTTP 503 when PostgreSQL is unavailable.
+6. `server/start-production.sh` runs `npm run db:migrate` and `npm run db:seed` before starting the HTTP server. A failure stops startup. Migration uses **prisma migrate deploy**, not `db push` or a destructive reset. Seed upserts preserve existing data and prices. Railway no longer permits new services to use the deprecated `railway.json` configuration, so deployment does not depend on that file. See [Railway configuration guidance](https://docs.railway.com/infrastructure-as-code).
+7. Confirm `/health` returns HTTP 200 with `database: connected` and `schema: ready`. It returns HTTP 503 when PostgreSQL, the two completed migrations or initial business settings are unavailable.
 8. Configure a randomly generated `ADMIN_SETUP_KEY` in Railway Variables and use **First-time Admin setup** on the sign-in page. Remove the key afterward. Alternatively use `npm run admin:setup` through an authenticated service shell; remove `ADMIN_PASSWORD` afterward.
 9. Sign in, review shop name/timezone, prices and turnaround estimates, create staff accounts, and replenish inventory. Enable service supply mappings when ready.
 10. Verify a clean redeploy: existing data and sessions are in PostgreSQL; the web filesystem contains no business data. Keep the database volume and configure database backups in Railway.
@@ -202,7 +202,7 @@ server/
   test/                 Database integration and security scenarios
 scripts/test-embedded.mjs
 Dockerfile
-railway.json
+server/start-production.sh
 .github/workflows/ci.yml
 ```
 

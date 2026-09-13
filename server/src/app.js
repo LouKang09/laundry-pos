@@ -49,8 +49,17 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "100kb" }), cookieParser());
 app.get("/health", async (req, res) => {
   try {
-    await db.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", database: "connected" });
+    const [migrations] = await db.$queryRaw`
+      SELECT COUNT(*)::int AS applied FROM "_prisma_migrations"
+      WHERE migration_name IN ('202609130001_initial', '202609130002_database_guards')
+        AND finished_at IS NOT NULL AND rolled_back_at IS NULL`;
+    const settings = await db.setting.findUnique({
+      where: { key: "business" },
+      select: { key: true },
+    });
+    if (migrations.applied !== 2 || !settings)
+      throw new Error("Database setup incomplete");
+    res.json({ status: "ok", database: "connected", schema: "ready" });
   } catch {
     res.status(503).json({ status: "unavailable" });
   }

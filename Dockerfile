@@ -16,4 +16,4 @@ ENV NODE_ENV=production
 COPY --from=build --chown=node:node /app /app
 USER node
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["sh", "server/start-production.sh"]
