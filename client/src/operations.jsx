@@ -1,20 +1,1211 @@
-import React,{useState,useEffect} from 'react';
-import {Link,useParams} from 'react-router-dom';
-import {Plus,ArrowUpRight,ArrowRight,Shirt,Scale,Wind,Clock,Check,Trash2,Printer,Waves,PackageCheck,RefreshCw} from 'lucide-react';
-import Decimal from 'decimal.js';
-import {api,post} from './api';
-import {useApp} from './main';
-import {useData,PageHead,Loading,ErrorBox,Empty,Field,SaveButton,Modal,Table,SearchBox,Pager,Badge,cash,date,label,stages} from './ui';
-export function SalesChart({rows=[]}){const max=Math.max(...rows.map(r=>Number(r.sales)),1);return <div className="sales-chart">{rows.length?rows.map(r=><div className="chart-col" key={r.date}><span>{cash(r.sales)}</span><div className="bar-track"><div style={{height:Math.max(2,Number(r.sales)/max*100)+'%'}}/></div><small>{r.date.slice(5)}</small></div>):<Empty>Sales will appear as orders are received.</Empty>}</div>}
-export function Dashboard(){const [rev,setRev]=useState(0);const {data:d,error,loading}=useData('/dashboard',rev);useEffect(()=>{const id=setInterval(()=>setRev(v=>v+1),30000);return()=>clearInterval(id)},[]);const {user}=useApp();return <><PageHead title={`Good ${new Date().getHours()<12?'morning':'day'}, ${user.name.split(' ')[0]}`}><button className="secondary" onClick={()=>setRev(v=>v+1)}><RefreshCw size={17}/> Refresh</button><Link className="primary" to="/new"><Plus size={19}/> New order</Link></PageHead><ErrorBox message={error}/>{loading&&!d?<Loading/>:d&&<><div className="summary-grid"><div className="stat hero-stat"><span>Today's sales</span><h2>{cash(d.todaySales)}</h2><small>Orders received today · excludes cancellations</small><ArrowUpRight className="stat-icon"/></div><Stat title="Today's orders" value={d.todayOrders}/><Stat title="Active orders" value={d.activeOrders}/><Stat title="Ready for pickup" value={d.statuses.READY||0} accent/></div><div className="section-title"><h2>On the floor</h2><Link to="/orders">View orders <ArrowRight size={16}/></Link></div><div className="stage-cards">{['RECEIVED','WASHING','DRYING','FOLDING'].map(s=><Link to={'/orders?status='+s} className={'stage-card '+s.toLowerCase()} key={s}><Badge value={s}/><strong>{d.statuses[s]||0}</strong><span>orders</span></Link>)}</div><div className="dashboard-panels"><section className="panel"><div className="section-title"><h2>Sales this week</h2><span className="muted">Last 7 days</span></div><SalesChart rows={d.trend}/></section><section className="panel"><h2>Order status</h2><div className="status-bars">{stages.map(s=><div key={s}><span>{label(s)}</span><div><i className={s.toLowerCase()} style={{width:Math.max(2,100*(d.statuses[s]||0)/Math.max(...Object.values(d.statuses),1))+'%'}}/></div><strong>{d.statuses[s]||0}</strong></div>)}</div></section></div><div className="quick-stats"><Stat title="Claimed today" value={d.claimedToday}/><Stat title="Unpaid orders" value={d.unpaidOrders}/><Stat title="Low inventory" value={d.lowInventory}/></div></>}</>}
-function Stat({title,value,accent}){return <div className={'stat '+(accent?'accent-stat':'')}><span>{title}</span><h2>{value}</h2></div>}
-export function CustomerForm({onSaved,onClose}){const [error,setError]=useState(''),[busy,setBusy]=useState(false);return <Modal title="New customer" onClose={onClose}><form onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{const c=await post('/customers',Object.fromEntries(new FormData(e.currentTarget)));onSaved(c)}catch(e){setError(e.message)}finally{setBusy(false)}}}><ErrorBox message={error}/><Field label="Customer name" name="name" required maxLength={160} autoFocus/><Field label="Phone number" name="phone" type="tel" required placeholder="09XX XXX XXXX" maxLength={20}/><SaveButton busy={busy}>Register customer</SaveButton></form></Modal>}
-export function NewOrder(){const {notify}=useApp();const {data:services,error:sError}=useData('/services');const [q,setQ]=useState(''),[customer,setCustomer]=useState(null),[newCustomer,setNewCustomer]=useState(false),[lines,setLines]=useState([]),[express,setExpress]=useState(false),[payment,setPayment]=useState('UNPAID'),[reference,setReference]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[saved,setSaved]=useState(null),[key,setKey]=useState(crypto.randomUUID()),[from,setFrom]=useState(''),[to,setTo]=useState('');const {data:customers,error:cError}=useData('/customers?q='+encodeURIComponent(q));
-const priced=lines.map(l=>{const s=services?.find(s=>s.id===l.serviceId);const actual=new Decimal(l.actualQuantity||0),billable=Decimal.max(actual,s?.minimumQuantity||0),price=new Decimal(l.express?s.expressPrice:s.regularPrice);return {...l,s,billable,price,total:billable.mul(price).toDecimalPlaces(2,Decimal.ROUND_HALF_UP)}});const total=priced.reduce((a,l)=>a.add(l.total),new Decimal(0));
-const update=(i,field,value)=>setLines(lines.map((l,n)=>n===i?{...l,[field]:value}:l));
-return <><PageHead title="New order" eyebrow="POINT OF SALE"><span className="muted">Start with a customer, then add services.</span></PageHead><ErrorBox message={error||sError||cError}/><div className="pos-grid"><div className="pos-left"><section className="panel"><div className="section-title"><h2><span className="step">1</span> Customer</h2><button className="text-button" onClick={()=>setNewCustomer(true)}><Plus size={16}/> New customer</button></div>{customer?<div className="selected-customer"><span className="avatar">{customer.name[0]}</span><div><strong>{customer.name}</strong><small>{customer.phone}</small></div><button className="secondary" onClick={()=>setCustomer(null)}>Change</button></div>:<><SearchBox value={q} onChange={setQ} placeholder="Search customer name or phone"/><div className="customer-results">{customers?.rows.slice(0,5).map(c=><button key={c.id} onClick={()=>setCustomer(c)}><span><strong>{c.name}</strong><small>{c.phone}</small></span><Plus size={17}/></button>)}{customers&&!customers.rows.length&&<Empty>No customers found. Register a new customer.</Empty>}</div></>}</section><section className="panel"><div className="section-title"><h2><span className="step">2</span> Services</h2><div className="segmented"><button className={!express?'selected':''} onClick={()=>setExpress(false)}>Regular</button><button className={express?'selected':''} onClick={()=>setExpress(true)}><Wind size={15}/> Express</button></div></div><div className="service-grid">{services?.map(s=><button className="service-card" key={s.id} onClick={()=>setLines([...lines,{serviceId:s.id,actualQuantity:'1',express}])}><span className={'service-icon '+(s.unit==='KG'?'blue':'amber')}>{s.unit==='KG'?<Waves/>:<Shirt/>}</span><strong>{s.name}</strong><span className="service-price">{cash(express?s.expressPrice:s.regularPrice)} <small>/ {s.unit==='KG'?'kg':'piece'}</small></span><small className="muted">Minimum {s.minimumQuantity} {s.unit==='KG'?'kg':'pc'}</small><span className="card-plus"><Plus size={17}/></span></button>)}</div>{!services?<Loading/>:!services.length&&<Empty>Ask Admin to activate a service.</Empty>}</section></div><section className="panel order-summary"><div className="section-title"><h2>Order summary</h2><span className="count">{lines.length} services</span></div><div className="order-lines">{priced.length?priced.map((l,i)=><div className="order-line" key={i}><div className="line-top"><strong>{l.s.name}</strong><button className="icon" aria-label={'Remove '+l.s.name} onClick={()=>setLines(lines.filter((_,n)=>n!==i))}><Trash2 size={17}/></button></div><div className="line-inputs"><Field label={'Actual '+(l.s.unit==='KG'?'kg':'pieces')} type="number" min={l.s.unit==='KG'?'0.001':'1'} step={l.s.unit==='KG'?'0.001':'1'} value={l.actualQuantity} onChange={e=>update(i,'actualQuantity',e.target.value)}/><Field label="Speed"><select value={l.express?'EXPRESS':'REGULAR'} onChange={e=>update(i,'express',e.target.value==='EXPRESS')}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></Field></div><div className="line-bottom"><small>Billable {l.billable.toString()} {l.s.unit.toLowerCase()} × {cash(l.price)}</small><strong>{cash(l.total)}</strong></div></div>):<Empty>Select a service to start the order.</Empty>}</div><details><summary>Approximate pickup window (optional)</summary><Field label="From" type="datetime-local" value={from} onChange={e=>setFrom(e.target.value)}/><Field label="To" type="datetime-local" value={to} onChange={e=>setTo(e.target.value)}/><small className="muted">Leave blank to use the shop's turnaround estimate. Times use this device's timezone.</small></details><div className="total"><span>Total due</span><strong>{cash(total)}</strong></div><Field label="Payment"><select value={payment} onChange={e=>setPayment(e.target.value)}><option value="UNPAID">Unpaid · Pay at pickup</option><option value="CASH">Paid · Cash</option><option value="GCASH">Paid · GCash</option></select></Field>{payment==='GCASH'&&<Field label="GCash reference" value={reference} onChange={e=>setReference(e.target.value)} required/>}<button className="primary full" disabled={busy||!customer||!lines.length} onClick={async()=>{setBusy(true);setError('');try{const o=await post('/orders',{requestKey:key,customerId:customer.id,items:lines,...(payment!=='UNPAID'?{payment:{method:payment,...(payment==='GCASH'?{reference}:{})}}:{}),...(from?{estimatedFrom:new Date(from).toISOString()}:{}),...(to?{estimatedTo:new Date(to).toISOString()}:{} )});setSaved(o.id);setLines([]);setCustomer(null);setPayment('UNPAID');setReference('');setFrom('');setTo('');setKey(crypto.randomUUID());notify('Order '+o.orderNumber+' received')}catch(e){setError(e.message)}finally{setBusy(false)}}}>{busy?'Saving order…':'Save order'}<ArrowRight size={18}/></button><p className="small muted center">New orders begin at Received.</p></section></div>{newCustomer&&<CustomerForm onClose={()=>setNewCustomer(false)} onSaved={c=>{setCustomer(c);setNewCustomer(false)}}/>}{saved&&<OrderDetail id={saved} onClose={()=>setSaved(null)}/>}</>}
-export function OrderList({mode='orders',customerId}){const [q,setQ]=useState(''),[status,setStatus]=useState(new URLSearchParams(location.search).get('status')||''),[page,setPage]=useState(1),[rev,setRev]=useState(0),[selected,setSelected]=useState(null);const path='/orders?q='+encodeURIComponent(q)+'&page='+page+'&view='+mode+(status?'&status='+status:'')+(customerId?'&customerId='+customerId:'');const {data,error,loading}=useData(path,rev);useEffect(()=>{setPage(1)},[q,status]);const title=mode==='pickup'?'Pickup & claim':mode==='transactions'?'Transactions':'Orders';return <>{!customerId&&<PageHead title={title}><Link to="/new" className="primary"><Plus size={18}/> New order</Link></PageHead>}<section className="panel"><div className="filters"><SearchBox value={q} onChange={setQ} placeholder={mode==='pickup'?'Order #, customer, phone, or scan / paste QR link':'Search order #, customer name, or phone'}/><select aria-label="Laundry status" value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option>{[...stages,'CANCELLED'].map(s=><option key={s}>{s}</option>)}</select><button className="secondary" onClick={()=>setRev(v=>v+1)} aria-label="Refresh orders"><RefreshCw size={18}/></button></div>{mode==='pickup'&&<p className="muted">Only paid orders at Ready can be claimed. A USB/Bluetooth QR scanner can enter the tracking link in search.</p>}<ErrorBox message={error}/>{loading?<Loading/>:data?.rows.length?<><Table headers={['Order / received','Customer','Services · actual → billable','Total','Payment','Status','Staff / claimed','']} >{data.rows.map(o=><tr key={o.id}><td><button className="text-button" onClick={()=>setSelected(o.id)}>{o.orderNumber}</button><small>{date(o.createdAt)}</small></td><td><strong>{o.customerName}</strong><small>{o.customerPhone}</small></td><td>{o.items.map(i=><div key={i.id}>{i.serviceName}<small>{i.actualQuantity} → {i.billableQuantity} {i.unit} · {i.express?'Express':'Regular'}</small></div>)}</td><td className="money">{cash(o.total)}</td><td><Badge value={o.paymentStatus}/><small>{o.payment?.method||'—'}</small></td><td><Badge value={o.status}/></td><td>{o.user.name}<small>{o.claimedAt?date(o.claimedAt):'Not claimed'}</small></td><td><button className="secondary" onClick={()=>setSelected(o.id)}>{mode==='pickup'?'Process':'Open'}<ArrowRight size={16}/></button></td></tr>)}</Table><Pager page={page} total={data.total} onChange={setPage}/></>:<Empty>No matching orders.</Empty>}</section>{selected&&<OrderDetail id={selected} onClose={()=>{setSelected(null);setRev(v=>v+1)}} onChanged={()=>setRev(v=>v+1)}/>}</>}
-export function OrderDetail({id,onClose,onChanged=()=>{}}){const {admin,notify}=useApp(),[rev,setRev]=useState(0),{data:o,error,loading}=useData('/orders/'+id,rev);const [busy,setBusy]=useState(false),[err,setErr]=useState(''),[method,setMethod]=useState('CASH'),[reference,setReference]=useState(''),[receipt,setReceipt]=useState(null),[reason,setReason]=useState(''),[cancel,setCancel]=useState(false);async function action(fn){setBusy(true);setErr('');try{await fn();setRev(v=>v+1);onChanged()}catch(e){setErr(e.message)}finally{setBusy(false)}}const next=o&&stages[stages.indexOf(o.status)+1];return <Modal title={o?.orderNumber||'Order details'} onClose={onClose} wide><ErrorBox message={error||err}/>{loading&&!o?<Loading/>:o&&<><div className="detail-heading"><div><h2>{o.customerName}</h2><p>{o.customerPhone}</p></div><div className="actions"><Badge value={o.status}/><Badge value={o.paymentStatus}/></div></div><div className="workflow">{stages.map((s,i)=><div className={stages.indexOf(o.status)>=i?'done':''} key={s}><span>{stages.indexOf(o.status)>i?<Check size={14}/>:i+1}</span><small>{label(s)}</small></div>)}</div><Table headers={['Service','Actual','Billable','Rate','Total']}>{o.items.map(i=><tr key={i.id}><td>{i.serviceName}<small>{i.express?'Express':'Regular'}</small></td><td>{i.actualQuantity} {i.unit}</td><td>{i.billableQuantity} {i.unit}</td><td>{cash(i.unitPrice)}</td><td>{cash(i.total)}</td></tr>)}</Table><div className="detail-meta"><p>Received <strong>{date(o.createdAt)}</strong></p><p>Approximate pickup <strong>{date(o.estimatedFrom)} – {date(o.estimatedTo)}</strong></p><p>Payment <strong>{o.payment?`${o.payment.method} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`:'Unpaid'}</strong></p><p>Total <strong>{cash(o.total)}</strong></p></div>{o.status!=='CANCELLED'&&o.status!=='CLAIMED'&&<div className="action-panel">{o.paymentStatus==='UNPAID'&&<div><h3>Receive full payment</h3><p className="muted">Verify the payment before recording it. Amount: {cash(o.total)}</p><div className="filters"><select aria-label="Payment method" value={method} onChange={e=>setMethod(e.target.value)}><option>CASH</option><option>GCASH</option></select>{method==='GCASH'&&<input aria-label="GCash reference" placeholder="GCash reference" value={reference} onChange={e=>setReference(e.target.value)}/>}<button className="primary" disabled={busy} onClick={()=>action(async()=>{await post('/orders/'+id+'/payment',{method,...(method==='GCASH'?{reference}:{})});notify('Payment received')})}>Receive {cash(o.total)}</button></div></div>}{next&&<div className="section-title"><div><h3>{next==='CLAIMED'?'Complete pickup':'Move laundry forward'}</h3>{next==='CLAIMED'&&o.paymentStatus==='UNPAID'&&<p className="muted">Payment is required before claiming.</p>}</div><button className="primary" disabled={busy||(next==='CLAIMED'&&o.paymentStatus!=='PAID')} onClick={()=>action(()=>post('/orders/'+id+'/status',{status:next}))}>Mark {label(next)}<ArrowRight size={18}/></button></div>}</div>}<div className="actions detail-actions">{admin&&<button className="secondary" disabled={busy} onClick={()=>action(async()=>setReceipt(await post('/orders/'+id+'/receipt')))}><Printer size={18}/> {o.printCount?'Reprint receipt':'Print receipt'}</button>}<Link className="secondary" target="_blank" to={'/track/'+o.trackingToken}>Public tracking<ArrowUpRight size={16}/></Link>{admin&&o.status==='RECEIVED'&&o.paymentStatus==='UNPAID'&&<button className="danger" onClick={()=>setCancel(!cancel)}>Cancel order</button>}</div>{cancel&&<div className="action-panel"><Field label="Cancellation reason" value={reason} onChange={e=>setReason(e.target.value)}/><button className="danger" disabled={busy||reason.trim().length<3} onClick={()=>action(async()=>{await post('/orders/'+id+'/status',{status:'CANCELLED',reason});setCancel(false)})}>Confirm cancellation</button></div>}{o.cancellationReason&&<p>Cancellation: {o.cancellationReason}</p>}<div className="detail-bottom"><section><h3>Status history</h3>{o.statusHistory?.map(h=><div className="history-item" key={h.id}><Badge value={h.newStatus}/><span>{h.user.name}<small>{date(h.createdAt)}</small></span></div>)}</section><section><h3>Customer notifications</h3>{o.notifications?.length?o.notifications.map(n=><div className="notification" key={n.id}><span className="small muted">{n.state} · {date(n.createdAt)}</span><p>{n.message}</p>{n.state==='PENDING'&&<small className="muted">Stored, awaiting SMS delivery.</small>}</div>):<p className="muted">Messages are generated at Drying, Folding, and Ready.</p>}</section></div></>}{receipt&&<Receipt data={receipt} onClose={()=>setReceipt(null)}/>}</Modal>}
-function Receipt({data:o,onClose}){return <div className="receipt-overlay"><div className="receipt-controls"><button className="primary" onClick={()=>window.print()}><Printer size={18}/> Print</button><button className="secondary" onClick={onClose}>Close</button></div><article className="receipt"><h2>{o.business.name}</h2><p>ORDER / CLAIM RECEIPT · COPY {o.copy}</p><h3>{o.orderNumber}</h3><p>{o.customerName}<br/>{o.customerPhone}</p><p>{date(o.createdAt)}</p><hr/>{o.items.map(i=><div key={i.id}><strong>{i.serviceName} · {i.express?'Express':'Regular'}</strong><p>Actual: {i.actualQuantity} {i.unit}<br/>Billable: {i.billableQuantity} {i.unit} × {cash(i.unitPrice)}<b className="right">{cash(i.total)}</b></p></div>)}<hr/><h3>Total <span className="right">{cash(o.total)}</span></h3><p>{o.paymentStatus}{o.payment?' · '+o.payment.method:''}</p><p>Approximate pickup<br/>{date(o.estimatedFrom)} – {date(o.estimatedTo)}<br/><small>Timing may change. Check tracking for updates.</small></p><img src={o.qr} alt="Scan to track this order"/><p>Scan for laundry progress.<br/>Keep this receipt for pickup.</p></article></div>}
-export function Customers(){const [q,setQ]=useState(''),[page,setPage]=useState(1),[rev,setRev]=useState(0),[create,setCreate]=useState(false),[selected,setSelected]=useState(null);const {data,error,loading}=useData('/customers?q='+encodeURIComponent(q)+'&page='+page,rev);useEffect(()=>setPage(1),[q]);return <><PageHead title="Customers"><button className="primary" onClick={()=>setCreate(true)}><Plus size={18}/> New customer</button></PageHead><section className="panel"><SearchBox value={q} onChange={setQ} placeholder="Search customer name or phone"/><ErrorBox message={error}/>{loading?<Loading/>:data?.rows.length?<><Table headers={['Customer','Phone','Orders','Registered','']}>{data.rows.map(c=><tr key={c.id}><td><strong>{c.name}</strong></td><td>{c.phone}</td><td>{c._count.orders}</td><td>{date(c.createdAt)}</td><td><button className="secondary" onClick={()=>setSelected(c)}>Order history<ArrowRight size={16}/></button></td></tr>)}</Table><Pager page={page} total={data.total} onChange={setPage}/></>:<Empty>No customers found.</Empty>}</section>{create&&<CustomerForm onClose={()=>setCreate(false)} onSaved={()=>{setCreate(false);setRev(v=>v+1)}}/>}{selected&&<Modal title={selected.name+' · Order history'} onClose={()=>setSelected(null)} wide><OrderList customerId={selected.id}/></Modal>}</>}
-export function Tracking(){const {token}=useParams(),[rev,setRev]=useState(0);const {data:o,error,loading}=useData('/track/'+token,rev);useEffect(()=>{const id=setInterval(()=>setRev(v=>v+1),60000);return()=>clearInterval(id)},[]);return <div className="tracking"><div className="tracking-card"><span className="brand-symbol"><Waves size={30}/></span><p className="eyebrow">LAUNDRY TRACKING</p><ErrorBox message={error}/>{loading&&!o?<Loading/>:o&&<><h1>{o.businessName}</h1><p className="muted">{o.orderNumber}</p><div className="tracking-status"><Badge value={o.status}/><h2>{o.status==='READY'?'Fresh, folded & ready.':o.status==='CLAIMED'?'Your laundry has been claimed.':o.status==='CANCELLED'?'This order was cancelled.':'Your laundry is in good hands.'}</h2></div><div className="workflow">{stages.map((s,i)=><div className={stages.indexOf(o.status)>=i?'done':''} key={s}><span>{i+1}</span><small>{label(s)}</small></div>)}</div><p>Received<br/><strong>{date(o.createdAt)}</strong></p>{!['CANCELLED','CLAIMED'].includes(o.status)&&<p>Approximate pickup<br/><strong>{date(o.estimatedFrom)} – {date(o.estimatedTo)}</strong></p>}<p className="muted small">{o.status==='READY'?'Please bring your order receipt when collecting.':'Pickup times are estimates and may change. The current status is the best guide.'}</p><button className="secondary" onClick={()=>setRev(v=>v+1)}><RefreshCw size={17}/> Refresh status</button></>}</div></div>}
+import React, { useState, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
+import {
+  Plus,
+  ArrowUpRight,
+  ArrowRight,
+  Shirt,
+  Scale,
+  Wind,
+  Clock,
+  Check,
+  Trash2,
+  Printer,
+  Waves,
+  PackageCheck,
+  RefreshCw,
+} from "lucide-react";
+import Decimal from "decimal.js";
+import { api, post } from "./api";
+import { useApp } from "./context";
+import {
+  useData,
+  PageHead,
+  Loading,
+  ErrorBox,
+  Empty,
+  Field,
+  SaveButton,
+  Modal,
+  Table,
+  SearchBox,
+  Pager,
+  Badge,
+  cash,
+  date,
+  label,
+  stages,
+} from "./ui";
+export function SalesChart({ rows = [] }) {
+  const max = Math.max(...rows.map((r) => Number(r.sales)), 1);
+  return (
+    <div className="sales-chart">
+      {rows.length ? (
+        rows.map((r) => (
+          <div className="chart-col" key={r.date}>
+            <span>{cash(r.sales)}</span>
+            <div className="bar-track">
+              <div
+                style={{
+                  height: Math.max(2, (Number(r.sales) / max) * 100) + "%",
+                }}
+              />
+            </div>
+            <small>{r.date.slice(5)}</small>
+          </div>
+        ))
+      ) : (
+        <Empty>Sales will appear as orders are received.</Empty>
+      )}
+    </div>
+  );
+}
+export function Dashboard() {
+  const [rev, setRev] = useState(0);
+  const { data: d, error, loading } = useData("/dashboard", rev);
+  useEffect(() => {
+    const id = setInterval(() => setRev((v) => v + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const { user } = useApp();
+  return (
+    <>
+      <PageHead
+        title={`Good ${new Date().getHours() < 12 ? "morning" : "day"}, ${user.name.split(" ")[0]}`}
+      >
+        <button className="secondary" onClick={() => setRev((v) => v + 1)}>
+          <RefreshCw size={17} /> Refresh
+        </button>
+        <Link className="primary" to="/new">
+          <Plus size={19} /> New order
+        </Link>
+      </PageHead>
+      <ErrorBox message={error} />
+      {loading && !d ? (
+        <Loading />
+      ) : (
+        d && (
+          <>
+            <div className="summary-grid">
+              <div className="stat hero-stat">
+                <span>Today's sales</span>
+                <h2>{cash(d.todaySales)}</h2>
+                <small>Orders received today · excludes cancellations</small>
+                <ArrowUpRight className="stat-icon" />
+              </div>
+              <Stat title="Today's orders" value={d.todayOrders} />
+              <Stat title="Active orders" value={d.activeOrders} />
+              <Stat
+                title="Ready for pickup"
+                value={d.statuses.READY || 0}
+                accent
+              />
+            </div>
+            <div className="section-title">
+              <h2>On the floor</h2>
+              <Link to="/orders">
+                View orders <ArrowRight size={16} />
+              </Link>
+            </div>
+            <div className="stage-cards">
+              {["RECEIVED", "WASHING", "DRYING", "FOLDING"].map((s) => (
+                <Link
+                  to={"/orders?status=" + s}
+                  className={"stage-card " + s.toLowerCase()}
+                  key={s}
+                >
+                  <Badge value={s} />
+                  <strong>{d.statuses[s] || 0}</strong>
+                  <span>orders</span>
+                </Link>
+              ))}
+            </div>
+            <div className="dashboard-panels">
+              <section className="panel">
+                <div className="section-title">
+                  <h2>Sales this week</h2>
+                  <span className="muted">Last 7 days</span>
+                </div>
+                <SalesChart rows={d.trend} />
+              </section>
+              <section className="panel">
+                <h2>Order status</h2>
+                <div className="status-bars">
+                  {stages.map((s) => (
+                    <div key={s}>
+                      <span>{label(s)}</span>
+                      <div>
+                        <i
+                          className={s.toLowerCase()}
+                          style={{
+                            width:
+                              Math.max(
+                                2,
+                                (100 * (d.statuses[s] || 0)) /
+                                  Math.max(...Object.values(d.statuses), 1),
+                              ) + "%",
+                          }}
+                        />
+                      </div>
+                      <strong>{d.statuses[s] || 0}</strong>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+            <div className="quick-stats">
+              <Stat title="Claimed today" value={d.claimedToday} />
+              <Stat title="Unpaid orders" value={d.unpaidOrders} />
+              <Stat title="Low inventory" value={d.lowInventory} />
+            </div>
+          </>
+        )
+      )}
+    </>
+  );
+}
+function Stat({ title, value, accent }) {
+  return (
+    <div className={"stat " + (accent ? "accent-stat" : "")}>
+      <span>{title}</span>
+      <h2>{value}</h2>
+    </div>
+  );
+}
+export function CustomerForm({ onSaved, onClose }) {
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  return (
+    <Modal title="New customer" onClose={onClose}>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            const c = await post(
+              "/customers",
+              Object.fromEntries(new FormData(e.currentTarget)),
+            );
+            onSaved(c);
+          } catch (e) {
+            setError(e.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <ErrorBox message={error} />
+        <Field
+          label="Customer name"
+          name="name"
+          required
+          maxLength={160}
+          autoFocus
+        />
+        <Field
+          label="Phone number"
+          name="phone"
+          type="tel"
+          required
+          placeholder="09XX XXX XXXX"
+          maxLength={20}
+        />
+        <SaveButton busy={busy}>Register customer</SaveButton>
+      </form>
+    </Modal>
+  );
+}
+export function NewOrder() {
+  const { notify } = useApp();
+  const { data: services, error: sError } = useData("/services");
+  const [q, setQ] = useState(""),
+    [customer, setCustomer] = useState(null),
+    [newCustomer, setNewCustomer] = useState(false),
+    [lines, setLines] = useState([]),
+    [express, setExpress] = useState(false),
+    [payment, setPayment] = useState("UNPAID"),
+    [reference, setReference] = useState(""),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [saved, setSaved] = useState(null),
+    [key, setKey] = useState(crypto.randomUUID()),
+    [from, setFrom] = useState(""),
+    [to, setTo] = useState("");
+  const { data: customers, error: cError } = useData(
+    "/customers?q=" + encodeURIComponent(q),
+  );
+  const priced = lines.map((l) => {
+    const s = services?.find((s) => s.id === l.serviceId);
+    const actual = new Decimal(l.actualQuantity || 0),
+      billable = Decimal.max(actual, s?.minimumQuantity || 0),
+      price = new Decimal(l.express ? s.expressPrice : s.regularPrice);
+    return {
+      ...l,
+      s,
+      billable,
+      price,
+      total: billable.mul(price).toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    };
+  });
+  const total = priced.reduce((a, l) => a.add(l.total), new Decimal(0));
+  const update = (i, field, value) => {
+    const changed = lines.map((l, n) =>
+      n === i ? { ...l, [field]: value } : l,
+    );
+    if (field !== "express") {
+      setLines(changed);
+      return;
+    }
+    const merged = [];
+    for (const line of changed) {
+      const existing = merged.find(
+        (l) => l.serviceId === line.serviceId && l.express === line.express,
+      );
+      if (existing)
+        existing.actualQuantity = new Decimal(existing.actualQuantity || 0)
+          .add(line.actualQuantity || 0)
+          .toString();
+      else merged.push({ ...line });
+    }
+    setLines(merged);
+  };
+  return (
+    <>
+      <PageHead title="New order" eyebrow="POINT OF SALE">
+        <span className="muted">Start with a customer, then add services.</span>
+      </PageHead>
+      <ErrorBox message={error || sError || cError} />
+      <div className="pos-grid">
+        <div className="pos-left">
+          <section className="panel">
+            <div className="section-title">
+              <h2>
+                <span className="step">1</span> Customer
+              </h2>
+              <button
+                className="text-button"
+                onClick={() => setNewCustomer(true)}
+              >
+                <Plus size={16} /> New customer
+              </button>
+            </div>
+            {customer ? (
+              <div className="selected-customer">
+                <span className="avatar">{customer.name[0]}</span>
+                <div>
+                  <strong>{customer.name}</strong>
+                  <small>{customer.phone}</small>
+                </div>
+                <button className="secondary" onClick={() => setCustomer(null)}>
+                  Change
+                </button>
+              </div>
+            ) : (
+              <>
+                <SearchBox
+                  value={q}
+                  onChange={setQ}
+                  placeholder="Search customer name or phone"
+                />
+                <div className="customer-results">
+                  {customers?.rows.slice(0, 5).map((c) => (
+                    <button key={c.id} onClick={() => setCustomer(c)}>
+                      <span>
+                        <strong>{c.name}</strong>
+                        <small>{c.phone}</small>
+                      </span>
+                      <Plus size={17} />
+                    </button>
+                  ))}
+                  {customers && !customers.rows.length && (
+                    <Empty>No customers found. Register a new customer.</Empty>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+          <section className="panel">
+            <div className="section-title">
+              <h2>
+                <span className="step">2</span> Services
+              </h2>
+              <div className="segmented">
+                <button
+                  className={!express ? "selected" : ""}
+                  onClick={() => setExpress(false)}
+                >
+                  Regular
+                </button>
+                <button
+                  className={express ? "selected" : ""}
+                  onClick={() => setExpress(true)}
+                >
+                  <Wind size={15} /> Express
+                </button>
+              </div>
+            </div>
+            <div className="service-grid">
+              {services?.map((s) => (
+                <button
+                  className="service-card"
+                  key={s.id}
+                  onClick={() =>
+                    setLines((current) => {
+                      const index = current.findIndex(
+                        (l) => l.serviceId === s.id && l.express === express,
+                      );
+                      return index < 0
+                        ? [
+                            ...current,
+                            { serviceId: s.id, actualQuantity: "1", express },
+                          ]
+                        : current.map((l, i) =>
+                            i === index
+                              ? {
+                                  ...l,
+                                  actualQuantity: new Decimal(
+                                    l.actualQuantity || 0,
+                                  )
+                                    .add(1)
+                                    .toString(),
+                                }
+                              : l,
+                          );
+                    })
+                  }
+                >
+                  <span
+                    className={
+                      "service-icon " + (s.unit === "KG" ? "blue" : "amber")
+                    }
+                  >
+                    {s.unit === "KG" ? <Waves /> : <Shirt />}
+                  </span>
+                  <strong>{s.name}</strong>
+                  <span className="service-price">
+                    {cash(express ? s.expressPrice : s.regularPrice)}{" "}
+                    <small>/ {s.unit === "KG" ? "kg" : "piece"}</small>
+                  </span>
+                  <small className="muted">
+                    Minimum {s.minimumQuantity} {s.unit === "KG" ? "kg" : "pc"}
+                  </small>
+                  <span className="card-plus">
+                    <Plus size={17} />
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!services ? (
+              <Loading />
+            ) : (
+              !services.length && (
+                <Empty>Ask Admin to activate a service.</Empty>
+              )
+            )}
+          </section>
+        </div>
+        <section className="panel order-summary">
+          <div className="section-title">
+            <h2>Order summary</h2>
+            <span className="count">{lines.length} services</span>
+          </div>
+          <div className="order-lines">
+            {priced.length ? (
+              priced.map((l, i) => (
+                <div className="order-line" key={i}>
+                  <div className="line-top">
+                    <strong>{l.s.name}</strong>
+                    <button
+                      className="icon"
+                      aria-label={"Remove " + l.s.name}
+                      onClick={() => setLines(lines.filter((_, n) => n !== i))}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                  <div className="line-inputs">
+                    <Field
+                      label={"Actual " + (l.s.unit === "KG" ? "kg" : "pieces")}
+                      type="number"
+                      min={l.s.unit === "KG" ? "0.001" : "1"}
+                      step={l.s.unit === "KG" ? "0.001" : "1"}
+                      value={l.actualQuantity}
+                      onChange={(e) =>
+                        update(i, "actualQuantity", e.target.value)
+                      }
+                    />
+                    <Field label="Speed">
+                      <select
+                        value={l.express ? "EXPRESS" : "REGULAR"}
+                        onChange={(e) =>
+                          update(i, "express", e.target.value === "EXPRESS")
+                        }
+                      >
+                        <option value="REGULAR">Regular</option>
+                        <option value="EXPRESS">Express</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="line-bottom">
+                    <small>
+                      Billable {l.billable.toString()} {l.s.unit.toLowerCase()}{" "}
+                      × {cash(l.price)}
+                    </small>
+                    <strong>{cash(l.total)}</strong>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <Empty>Select a service to start the order.</Empty>
+            )}
+          </div>
+          <details>
+            <summary>Approximate pickup window (optional)</summary>
+            <Field
+              label="From"
+              type="datetime-local"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <Field
+              label="To"
+              type="datetime-local"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+            <small className="muted">
+              Leave blank to use the shop's turnaround estimate. Times use this
+              device's timezone.
+            </small>
+          </details>
+          <div className="total">
+            <span>Total due</span>
+            <strong>{cash(total)}</strong>
+          </div>
+          <Field label="Payment">
+            <select
+              value={payment}
+              onChange={(e) => setPayment(e.target.value)}
+            >
+              <option value="UNPAID">Unpaid · Pay at pickup</option>
+              <option value="CASH">Paid · Cash</option>
+              <option value="GCASH">Paid · GCash</option>
+            </select>
+          </Field>
+          {payment === "GCASH" && (
+            <Field
+              label="GCash reference"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              required
+            />
+          )}
+          <button
+            className="primary full"
+            disabled={busy || !customer || !lines.length}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                const o = await post("/orders", {
+                  requestKey: key,
+                  customerId: customer.id,
+                  items: lines,
+                  ...(payment !== "UNPAID"
+                    ? {
+                        payment: {
+                          method: payment,
+                          ...(payment === "GCASH" ? { reference } : {}),
+                        },
+                      }
+                    : {}),
+                  ...(from
+                    ? { estimatedFrom: new Date(from).toISOString() }
+                    : {}),
+                  ...(to ? { estimatedTo: new Date(to).toISOString() } : {}),
+                });
+                setSaved(o.id);
+                setLines([]);
+                setCustomer(null);
+                setPayment("UNPAID");
+                setReference("");
+                setFrom("");
+                setTo("");
+                setKey(crypto.randomUUID());
+                notify("Order " + o.orderNumber + " received");
+              } catch (e) {
+                setError(e.message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Saving order…" : "Save order"}
+            <ArrowRight size={18} />
+          </button>
+          <p className="small muted center">New orders begin at Received.</p>
+        </section>
+      </div>
+      {newCustomer && (
+        <CustomerForm
+          onClose={() => setNewCustomer(false)}
+          onSaved={(c) => {
+            setCustomer(c);
+            setNewCustomer(false);
+          }}
+        />
+      )}
+      {saved && <OrderDetail id={saved} onClose={() => setSaved(null)} />}
+    </>
+  );
+}
+export function OrderList({ mode = "orders", customerId }) {
+  const [q, setQ] = useState(""),
+    [status, setStatus] = useState(
+      new URLSearchParams(location.search).get("status") || "",
+    ),
+    [page, setPage] = useState(1),
+    [rev, setRev] = useState(0),
+    [selected, setSelected] = useState(null);
+  const path =
+    "/orders?q=" +
+    encodeURIComponent(q) +
+    "&page=" +
+    page +
+    "&view=" +
+    mode +
+    (status ? "&status=" + status : "") +
+    (customerId ? "&customerId=" + customerId : "");
+  const { data, error, loading } = useData(path, rev);
+  useEffect(() => {
+    setPage(1);
+  }, [q, status]);
+  const title =
+    mode === "pickup"
+      ? "Pickup & claim"
+      : mode === "transactions"
+        ? "Transactions"
+        : "Orders";
+  return (
+    <>
+      {!customerId && (
+        <PageHead title={title}>
+          <Link to="/new" className="primary">
+            <Plus size={18} /> New order
+          </Link>
+        </PageHead>
+      )}
+      <section className="panel">
+        <div className="filters">
+          <SearchBox
+            value={q}
+            onChange={setQ}
+            placeholder={
+              mode === "pickup"
+                ? "Order #, customer, phone, or scan / paste QR link"
+                : "Search order #, customer name, or phone"
+            }
+          />
+          <select
+            aria-label="Laundry status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="">All statuses</option>
+            {[...stages, "CANCELLED"].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <button
+            className="secondary"
+            onClick={() => setRev((v) => v + 1)}
+            aria-label="Refresh orders"
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
+        {mode === "pickup" && (
+          <p className="muted">
+            Only paid orders at Ready can be claimed. A USB/Bluetooth QR scanner
+            can enter the tracking link in search.
+          </p>
+        )}
+        <ErrorBox message={error} />
+        {loading ? (
+          <Loading />
+        ) : data?.rows.length ? (
+          <>
+            <Table
+              headers={[
+                "Order / received",
+                "Customer",
+                "Services · actual → billable",
+                "Total",
+                "Payment",
+                "Status",
+                "Staff / claimed",
+                "",
+              ]}
+            >
+              {data.rows.map((o) => (
+                <tr key={o.id}>
+                  <td>
+                    <button
+                      className="text-button"
+                      onClick={() => setSelected(o.id)}
+                    >
+                      {o.orderNumber}
+                    </button>
+                    <small>{date(o.createdAt)}</small>
+                  </td>
+                  <td>
+                    <strong>{o.customerName}</strong>
+                    <small>{o.customerPhone}</small>
+                  </td>
+                  <td>
+                    {o.items.map((i) => (
+                      <div key={i.id}>
+                        {i.serviceName}
+                        <small>
+                          {i.actualQuantity} → {i.billableQuantity} {i.unit} ·{" "}
+                          {i.express ? "Express" : "Regular"}
+                        </small>
+                      </div>
+                    ))}
+                  </td>
+                  <td className="money">{cash(o.total)}</td>
+                  <td>
+                    <Badge value={o.paymentStatus} />
+                    <small>{o.payment?.method || "—"}</small>
+                  </td>
+                  <td>
+                    <Badge value={o.status} />
+                  </td>
+                  <td>
+                    {o.user.name}
+                    <small>
+                      {o.claimedAt ? date(o.claimedAt) : "Not claimed"}
+                    </small>
+                  </td>
+                  <td>
+                    <button
+                      className="secondary"
+                      onClick={() => setSelected(o.id)}
+                    >
+                      {mode === "pickup" ? "Process" : "Open"}
+                      <ArrowRight size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            <Pager page={page} total={data.total} onChange={setPage} />
+          </>
+        ) : (
+          <Empty>No matching orders.</Empty>
+        )}
+      </section>
+      {selected && (
+        <OrderDetail
+          id={selected}
+          onClose={() => {
+            setSelected(null);
+            setRev((v) => v + 1);
+          }}
+          onChanged={() => setRev((v) => v + 1)}
+        />
+      )}
+    </>
+  );
+}
+export function OrderDetail({ id, onClose, onChanged = () => {} }) {
+  const { admin, notify } = useApp(),
+    [rev, setRev] = useState(0),
+    { data: o, error, loading } = useData("/orders/" + id, rev);
+  const [busy, setBusy] = useState(false),
+    [err, setErr] = useState(""),
+    [method, setMethod] = useState("CASH"),
+    [reference, setReference] = useState(""),
+    [receipt, setReceipt] = useState(null),
+    [reason, setReason] = useState(""),
+    [cancel, setCancel] = useState(false);
+  async function action(fn) {
+    setBusy(true);
+    setErr("");
+    try {
+      await fn();
+      setRev((v) => v + 1);
+      onChanged();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const next = o && stages[stages.indexOf(o.status) + 1];
+  return (
+    <Modal title={o?.orderNumber || "Order details"} onClose={onClose} wide>
+      <ErrorBox message={error || err} />
+      {loading && !o ? (
+        <Loading />
+      ) : (
+        o && (
+          <>
+            <div className="detail-heading">
+              <div>
+                <h2>{o.customerName}</h2>
+                <p>{o.customerPhone}</p>
+              </div>
+              <div className="actions">
+                <Badge value={o.status} />
+                <Badge value={o.paymentStatus} />
+              </div>
+            </div>
+            <div className="workflow">
+              {stages.map((s, i) => (
+                <div
+                  className={stages.indexOf(o.status) >= i ? "done" : ""}
+                  key={s}
+                >
+                  <span>
+                    {stages.indexOf(o.status) > i ? <Check size={14} /> : i + 1}
+                  </span>
+                  <small>{label(s)}</small>
+                </div>
+              ))}
+            </div>
+            <Table headers={["Service", "Actual", "Billable", "Rate", "Total"]}>
+              {o.items.map((i) => (
+                <tr key={i.id}>
+                  <td>
+                    {i.serviceName}
+                    <small>{i.express ? "Express" : "Regular"}</small>
+                  </td>
+                  <td>
+                    {i.actualQuantity} {i.unit}
+                  </td>
+                  <td>
+                    {i.billableQuantity} {i.unit}
+                  </td>
+                  <td>{cash(i.unitPrice)}</td>
+                  <td>{cash(i.total)}</td>
+                </tr>
+              ))}
+            </Table>
+            <div className="detail-meta">
+              <p>
+                Received <strong>{date(o.createdAt)}</strong>
+              </p>
+              <p>
+                Approximate pickup{" "}
+                <strong>
+                  {date(o.estimatedFrom)} – {date(o.estimatedTo)}
+                </strong>
+              </p>
+              <p>
+                Payment{" "}
+                <strong>
+                  {o.payment
+                    ? `${o.payment.method} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`
+                    : "Unpaid"}
+                </strong>
+              </p>
+              <p>
+                Total <strong>{cash(o.total)}</strong>
+              </p>
+            </div>
+            {o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
+              <div className="action-panel">
+                {o.paymentStatus === "UNPAID" && (
+                  <div>
+                    <h3>Receive full payment</h3>
+                    <p className="muted">
+                      Verify the payment before recording it. Amount:{" "}
+                      {cash(o.total)}
+                    </p>
+                    <div className="filters">
+                      <select
+                        aria-label="Payment method"
+                        value={method}
+                        onChange={(e) => setMethod(e.target.value)}
+                      >
+                        <option>CASH</option>
+                        <option>GCASH</option>
+                      </select>
+                      {method === "GCASH" && (
+                        <input
+                          aria-label="GCash reference"
+                          placeholder="GCash reference"
+                          value={reference}
+                          onChange={(e) => setReference(e.target.value)}
+                        />
+                      )}
+                      <button
+                        className="primary"
+                        disabled={busy}
+                        onClick={() =>
+                          action(async () => {
+                            await post("/orders/" + id + "/payment", {
+                              method,
+                              ...(method === "GCASH" ? { reference } : {}),
+                            });
+                            notify("Payment received");
+                          })
+                        }
+                      >
+                        Receive {cash(o.total)}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {next && (
+                  <div className="section-title">
+                    <div>
+                      <h3>
+                        {next === "CLAIMED"
+                          ? "Complete pickup"
+                          : "Move laundry forward"}
+                      </h3>
+                      {next === "CLAIMED" && o.paymentStatus === "UNPAID" && (
+                        <p className="muted">
+                          Payment is required before claiming.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      className="primary"
+                      disabled={
+                        busy ||
+                        (next === "CLAIMED" && o.paymentStatus !== "PAID")
+                      }
+                      onClick={() =>
+                        action(() =>
+                          post("/orders/" + id + "/status", { status: next }),
+                        )
+                      }
+                    >
+                      Mark {label(next)}
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="actions detail-actions">
+              {admin && (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    action(async () =>
+                      setReceipt(await post("/orders/" + id + "/receipt")),
+                    )
+                  }
+                >
+                  <Printer size={18} />{" "}
+                  {o.printCount ? "Reprint receipt" : "Print receipt"}
+                </button>
+              )}
+              <Link
+                className="secondary"
+                target="_blank"
+                to={"/track/" + o.trackingToken}
+              >
+                Public tracking
+                <ArrowUpRight size={16} />
+              </Link>
+              {admin &&
+                o.status === "RECEIVED" &&
+                o.paymentStatus === "UNPAID" && (
+                  <button className="danger" onClick={() => setCancel(!cancel)}>
+                    Cancel order
+                  </button>
+                )}
+            </div>
+            {cancel && (
+              <div className="action-panel">
+                <Field
+                  label="Cancellation reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <button
+                  className="danger"
+                  disabled={busy || reason.trim().length < 3}
+                  onClick={() =>
+                    action(async () => {
+                      await post("/orders/" + id + "/status", {
+                        status: "CANCELLED",
+                        reason,
+                      });
+                      setCancel(false);
+                    })
+                  }
+                >
+                  Confirm cancellation
+                </button>
+              </div>
+            )}
+            {o.cancellationReason && (
+              <p>Cancellation: {o.cancellationReason}</p>
+            )}
+            <div className="detail-bottom">
+              <section>
+                <h3>Status history</h3>
+                {o.statusHistory?.map((h) => (
+                  <div className="history-item" key={h.id}>
+                    <Badge value={h.newStatus} />
+                    <span>
+                      {h.user.name}
+                      <small>{date(h.createdAt)}</small>
+                    </span>
+                  </div>
+                ))}
+              </section>
+              <section>
+                <h3>Customer notifications</h3>
+                {o.notifications?.length ? (
+                  o.notifications.map((n) => (
+                    <div className="notification" key={n.id}>
+                      <span className="small muted">
+                        {n.state} · {date(n.createdAt)}
+                      </span>
+                      <p>{n.message}</p>
+                      {n.state === "PENDING" && (
+                        <small className="muted">
+                          Stored, awaiting SMS delivery.
+                        </small>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="muted">
+                    Messages are generated at Drying, Folding, and Ready.
+                  </p>
+                )}
+              </section>
+            </div>
+          </>
+        )
+      )}
+      {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
+    </Modal>
+  );
+}
+function Receipt({ data: o, onClose }) {
+  return (
+    <div className="receipt-overlay">
+      <div className="receipt-controls">
+        <button className="primary" onClick={() => window.print()}>
+          <Printer size={18} /> Print
+        </button>
+        <button className="secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      <article className="receipt">
+        <h2>{o.business.name}</h2>
+        <p>ORDER / CLAIM RECEIPT · COPY {o.copy}</p>
+        <h3>{o.orderNumber}</h3>
+        <p>
+          {o.customerName}
+          <br />
+          {o.customerPhone}
+        </p>
+        <p>{date(o.createdAt)}</p>
+        <hr />
+        {o.items.map((i) => (
+          <div key={i.id}>
+            <strong>
+              {i.serviceName} · {i.express ? "Express" : "Regular"}
+            </strong>
+            <p>
+              Actual: {i.actualQuantity} {i.unit}
+              <br />
+              Billable: {i.billableQuantity} {i.unit} × {cash(i.unitPrice)}
+              <b className="right">{cash(i.total)}</b>
+            </p>
+          </div>
+        ))}
+        <hr />
+        <h3>
+          Total <span className="right">{cash(o.total)}</span>
+        </h3>
+        <p>
+          {o.paymentStatus}
+          {o.payment ? " · " + o.payment.method : ""}
+        </p>
+        <p>
+          Approximate pickup
+          <br />
+          {date(o.estimatedFrom)} – {date(o.estimatedTo)}
+          <br />
+          <small>Timing may change. Check tracking for updates.</small>
+        </p>
+        <img src={o.qr} alt="Scan to track this order" />
+        <p>
+          Scan for laundry progress.
+          <br />
+          Keep this receipt for pickup.
+        </p>
+      </article>
+    </div>
+  );
+}
+export function Customers() {
+  const [q, setQ] = useState(""),
+    [page, setPage] = useState(1),
+    [rev, setRev] = useState(0),
+    [create, setCreate] = useState(false),
+    [selected, setSelected] = useState(null);
+  const { data, error, loading } = useData(
+    "/customers?q=" + encodeURIComponent(q) + "&page=" + page,
+    rev,
+  );
+  useEffect(() => setPage(1), [q]);
+  return (
+    <>
+      <PageHead title="Customers">
+        <button className="primary" onClick={() => setCreate(true)}>
+          <Plus size={18} /> New customer
+        </button>
+      </PageHead>
+      <section className="panel">
+        <SearchBox
+          value={q}
+          onChange={setQ}
+          placeholder="Search customer name or phone"
+        />
+        <ErrorBox message={error} />
+        {loading ? (
+          <Loading />
+        ) : data?.rows.length ? (
+          <>
+            <Table headers={["Customer", "Phone", "Orders", "Registered", ""]}>
+              {data.rows.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <strong>{c.name}</strong>
+                  </td>
+                  <td>{c.phone}</td>
+                  <td>{c._count.orders}</td>
+                  <td>{date(c.createdAt)}</td>
+                  <td>
+                    <button
+                      className="secondary"
+                      onClick={() => setSelected(c)}
+                    >
+                      Order history
+                      <ArrowRight size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+            <Pager page={page} total={data.total} onChange={setPage} />
+          </>
+        ) : (
+          <Empty>No customers found.</Empty>
+        )}
+      </section>
+      {create && (
+        <CustomerForm
+          onClose={() => setCreate(false)}
+          onSaved={() => {
+            setCreate(false);
+            setRev((v) => v + 1);
+          }}
+        />
+      )}
+      {selected && (
+        <Modal
+          title={selected.name + " · Order history"}
+          onClose={() => setSelected(null)}
+          wide
+        >
+          <OrderList customerId={selected.id} />
+        </Modal>
+      )}
+    </>
+  );
+}
+export function Tracking() {
+  const { token } = useParams(),
+    [rev, setRev] = useState(0);
+  const { data: o, error, loading } = useData("/track/" + token, rev);
+  useEffect(() => {
+    const id = setInterval(() => setRev((v) => v + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+  if (o?.timezone) window.businessZone = o.timezone;
+  return (
+    <div className="tracking">
+      <div className="tracking-card">
+        <span className="brand-symbol">
+          <Waves size={30} />
+        </span>
+        <p className="eyebrow">LAUNDRY TRACKING</p>
+        <ErrorBox message={error} />
+        {loading && !o ? (
+          <Loading />
+        ) : (
+          o && (
+            <>
+              <h1>{o.businessName}</h1>
+              <p className="muted">{o.orderNumber}</p>
+              <div className="tracking-status">
+                <Badge value={o.status} />
+                <h2>
+                  {o.status === "READY"
+                    ? "Fresh, folded & ready."
+                    : o.status === "CLAIMED"
+                      ? "Your laundry has been claimed."
+                      : o.status === "CANCELLED"
+                        ? "This order was cancelled."
+                        : "Your laundry is in good hands."}
+                </h2>
+              </div>
+              <div className="workflow">
+                {stages.map((s, i) => (
+                  <div
+                    className={stages.indexOf(o.status) >= i ? "done" : ""}
+                    key={s}
+                  >
+                    <span>{i + 1}</span>
+                    <small>{label(s)}</small>
+                  </div>
+                ))}
+              </div>
+              <p>
+                Received
+                <br />
+                <strong>{date(o.createdAt)}</strong>
+              </p>
+              {!["CANCELLED", "CLAIMED"].includes(o.status) && (
+                <p>
+                  Approximate pickup
+                  <br />
+                  <strong>
+                    {date(o.estimatedFrom)} – {date(o.estimatedTo)}
+                  </strong>
+                </p>
+              )}
+              <p className="muted small">
+                {o.status === "READY"
+                  ? "Please bring your order receipt when collecting."
+                  : "Pickup times are estimates and may change. The current status is the best guide."}
+              </p>
+              <button
+                className="secondary"
+                onClick={() => setRev((v) => v + 1)}
+              >
+                <RefreshCw size={17} /> Refresh status
+              </button>
+            </>
+          )
+        )}
+      </div>
+    </div>
+  );
+}

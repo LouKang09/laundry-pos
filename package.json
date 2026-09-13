@@ -1,1 +1,40 @@
-{"name":"laundry-pos","private":true,"version":"1.0.0","workspaces":["client","server"],"engines":{"node":">=22"},"scripts":{"dev":"concurrently \"npm run dev -w server\" \"npm run dev -w client\"","build":"npm run generate -w server && npm run build -w client","start":"npm run start -w server","db:migrate":"npm run migrate -w server","db:seed":"npm run seed -w server","admin:setup":"npm run admin:setup -w server","test":"npm run test -w server"},"devDependencies":{"concurrently":"^9.2.1"}}
+{
+  "name": "laundry-pos",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run generate -w server && npm run build -w client",
+    "start": "npm run start -w server",
+    "db:migrate": "npm run migrate -w server",
+    "db:seed": "npm run seed -w server",
+    "admin:setup": "npm run admin:setup -w server",
+    "test": "npm run test -w server",
+    "test:embedded": "node scripts/test-embedded.mjs",
+    "format": "prettier --write client/src server/src server/test server/prisma/*.js scripts *.json",
+    "test:ui": "vitest run"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "concurrently": "^9.2.1",
+    "deepmerge-ts": "^8.0.2",
+    "effect": "^3.22.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.6",
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "effect": "$effect",
+    "deepmerge-ts": "$deepmerge-ts"
+  }
+}
