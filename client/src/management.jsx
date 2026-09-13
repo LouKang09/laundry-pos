@@ -646,7 +646,8 @@ export function Reports() {
             <p className="muted small">
               Sales use order-received dates, excluding cancelled orders.
               Estimated profit = sales − recorded expenses. Payment collections
-              use payment dates. Processed quantities use the date laundry became Ready. Weekly reports start Monday.
+              use payment dates. Processed quantities use the date laundry
+              became Ready. Weekly reports start Monday.
             </p>
             <div className="dashboard-panels">
               <section className="panel">

@@ -45,7 +45,7 @@ import {
   BusinessSettings,
 } from "./management";
 import "./styles.css";
-import {Context} from "./context";
+import { Context } from "./context";
 
 const nav = [
   ["/", "Dashboard", LayoutDashboard],
@@ -64,7 +64,15 @@ const nav = [
 ];
 function Login({ onLogin }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [setupAvailable, setSetupAvailable] = useState(false),
+    [setup, setSetup] = useState(false),
+    [created, setCreated] = useState(false);
+  useEffect(() => {
+    api("/auth/setup-status")
+      .then((v) => setSetupAvailable(v.available))
+      .catch(() => {});
+  }, []);
   return (
     <div className="login">
       <section className="login-brand">
@@ -94,7 +102,12 @@ function Login({ onLogin }) {
             setError("");
             const f = new FormData(e.currentTarget);
             try {
-              onLogin(await post("/auth/login", Object.fromEntries(f)));
+              if (setup) {
+                await post("/auth/setup", Object.fromEntries(f));
+                setSetup(false);
+                setSetupAvailable(false);
+                setCreated(true);
+              } else onLogin(await post("/auth/login", Object.fromEntries(f)));
             } catch (e) {
               setError(e.message);
             } finally {
@@ -103,8 +116,28 @@ function Login({ onLogin }) {
           }}
         >
           <p className="eyebrow">WELCOME BACK</p>
-          <h2>Sign in to your workspace</h2>
-          <p className="muted">Use your Admin or Laundry Staff account.</p>
+          <h2>
+            {setup ? "Create your first Admin" : "Sign in to your workspace"}
+          </h2>
+          <p className="muted">
+            {setup
+              ? "Enter your private setup key and choose your sign-in details."
+              : created
+                ? "Admin created. Sign in with your new credentials."
+                : "Use your Admin or Laundry Staff account."}
+          </p>
+          {setup && (
+            <>
+              <Field
+                label="Setup key"
+                type="password"
+                name="setupKey"
+                required
+                autoComplete="off"
+              />
+              <Field label="Your name" name="name" required maxLength={160} />
+            </>
+          )}
           <ErrorBox message={error} />
           <Field
             label="Email address"
@@ -118,10 +151,25 @@ function Login({ onLogin }) {
             label="Password"
             type="password"
             name="password"
-            autoComplete="current-password"
+            autoComplete={setup ? "new-password" : "current-password"}
+            minLength={setup ? 12 : undefined}
             required
           />
-          <SaveButton busy={busy}>Sign in</SaveButton>
+          <SaveButton busy={busy}>
+            {setup ? "Create Admin" : "Sign in"}
+          </SaveButton>
+          {setupAvailable && (
+            <button
+              type="button"
+              className="text-button full"
+              onClick={() => {
+                setSetup(!setup);
+                setError("");
+              }}
+            >
+              {setup ? "Back to sign in" : "First-time Admin setup"}
+            </button>
+          )}
           <p className="small muted">
             Need an account? Ask your administrator.
           </p>

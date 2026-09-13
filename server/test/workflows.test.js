@@ -36,14 +36,38 @@ const call = (agent, csrf, method, path, body) =>
 before(async () => {
   await seed();
   const passwordHash = await bcrypt.hash(password, 12);
-  adminUser = await db.user.create({
-    data: {
-      name: "Test Admin",
-      email: prefix + "-admin@example.test",
-      passwordHash,
-      role: "ADMIN",
-    },
-  });
+  if ((await db.user.count({ where: { role: "ADMIN" } })) === 0) {
+    const oldKey = process.env.ADMIN_SETUP_KEY;
+    process.env.ADMIN_SETUP_KEY = crypto.randomBytes(32).toString("hex");
+    const available = await request(app)
+      .get("/api/auth/setup-status")
+      .expect(200);
+    assert.equal(available.body.available, true);
+    await request(app)
+      .post("/api/auth/setup")
+      .send({
+        name: "Test Admin",
+        email: prefix + "-admin@example.test",
+        password,
+        setupKey: process.env.ADMIN_SETUP_KEY,
+      })
+      .expect(201);
+    adminUser = await db.user.findUnique({
+      where: { email: prefix + "-admin@example.test" },
+    });
+    assert.notEqual(adminUser.passwordHash, password);
+    if (oldKey === undefined) delete process.env.ADMIN_SETUP_KEY;
+    else process.env.ADMIN_SETUP_KEY = oldKey;
+  } else {
+    adminUser = await db.user.create({
+      data: {
+        name: "Test Admin",
+        email: prefix + "-admin@example.test",
+        passwordHash,
+        role: "ADMIN",
+      },
+    });
+  }
   staffUser = await db.user.create({
     data: {
       name: "Test Staff",
@@ -499,4 +523,24 @@ test("22 disabled users lose sessions and cannot sign in", async () => {
     .post("/api/auth/login")
     .send({ email: tempEmail, password })
     .expect(401);
+});
+
+test("23 first-admin setup rejects missing key and closes after setup", async () => {
+  const old = process.env.ADMIN_SETUP_KEY;
+  process.env.ADMIN_SETUP_KEY = "test-only-setup-key-123456789";
+  const payload = {
+    name: "Blocked Admin",
+    email: "blocked@example.test",
+    password,
+    setupKey: "wrong",
+  };
+  await request(app).post("/api/auth/setup").send(payload).expect(403);
+  const status = await request(app).get("/api/auth/setup-status").expect(200);
+  assert.equal(status.body.available, false);
+  await request(app)
+    .post("/api/auth/setup")
+    .send({ ...payload, setupKey: process.env.ADMIN_SETUP_KEY })
+    .expect(409);
+  if (old === undefined) delete process.env.ADMIN_SETUP_KEY;
+  else process.env.ADMIN_SETUP_KEY = old;
 });

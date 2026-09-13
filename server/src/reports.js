@@ -36,8 +36,8 @@ async function report(from, to) {
       },
     }),
     db.orderStatusHistory.findMany({
-      where:{newStatus:'READY',createdAt:date},
-      include:{order:{include:{items:true}}},
+      where: { newStatus: "READY", createdAt: date },
+      include: { order: { include: { items: true } } },
     }),
   ]);
   const services = {},
@@ -69,10 +69,11 @@ async function report(from, to) {
       services[k].sales = services[k].sales.add(i.total);
     }
   }
-  for (const event of completed) for (const item of event.order.items) {
-    if (item.unit === 'KG') kg = kg.add(item.actualQuantity);
-    else pieces = pieces.add(item.actualQuantity);
-  }
+  for (const event of completed)
+    for (const item of event.order.items) {
+      if (item.unit === "KG") kg = kg.add(item.actualQuantity);
+      else pieces = pieces.add(item.actualQuantity);
+    }
   const gross = sum(orders, "total"),
     expense = sum(expenses, "amount");
   return {

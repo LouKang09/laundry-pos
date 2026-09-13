@@ -34,6 +34,11 @@ For a local production-build smoke run, set `APP_URL=http://localhost:3000` and 
 
 ### First Admin — no default password
 
+For the deployed app, open **First-time Admin setup** on the sign-in page. In Railway, open **laundry-pos → laundry-pos-web → Variables**, copy the private `ADMIN_SETUP_KEY`, and enter it in the setup form. Choose your name, email and a password of at least 12 characters. After success, sign in and remove `ADMIN_SETUP_KEY` from Railway Variables. Setup automatically closes as soon as an Admin exists, even if the key remains configured.
+
+The key is randomly generated, stored only as a private Railway variable and never included in the frontend or logs. The endpoint is rate-limited and creates the account atomically. The command-line method below remains available for local installations.
+
+
 The seed inserts configurable example services, five supplies with **zero stock**, and shop settings. It does not insert customers, sample orders or a fixed Admin password. Confirm service prices before real sales.
 
 Set temporary environment variables, then run `npm run admin:setup`:
@@ -70,7 +75,7 @@ Do not put production connection strings or credentials in GitHub. No database c
 
 6. `railway.json` runs `npm run db:migrate` and `npm run db:seed` as pre-deploy commands. Migration uses **prisma migrate deploy**, not `db push` or a destructive reset. Seed upserts preserve existing data and prices.
 7. Confirm `/health` returns HTTP 200 with `database: connected`. It returns HTTP 503 when PostgreSQL is unavailable.
-8. Use Railway's authenticated service shell to run `npm run admin:setup` with the temporary Admin variables. Remove `ADMIN_PASSWORD` afterward; do not add it as a build argument or a frontend `VITE_` variable.
+8. Configure a randomly generated `ADMIN_SETUP_KEY` in Railway Variables and use **First-time Admin setup** on the sign-in page. Remove the key afterward. Alternatively use `npm run admin:setup` through an authenticated service shell; remove `ADMIN_PASSWORD` afterward.
 9. Sign in, review shop name/timezone, prices and turnaround estimates, create staff accounts, and replenish inventory. Enable service supply mappings when ready.
 10. Verify a clean redeploy: existing data and sessions are in PostgreSQL; the web filesystem contains no business data. Keep the database volume and configure database backups in Railway.
 

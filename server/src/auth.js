@@ -47,6 +47,59 @@ export function admin(req, res, next) {
   next();
 }
 export function authRoutes(app) {
+  app.get("/api/auth/setup-status", async (req, res) => {
+    const available =
+      !!process.env.ADMIN_SETUP_KEY &&
+      (await db.user.count({ where: { role: "ADMIN" } })) === 0;
+    res.json({ available });
+  });
+  app.post(
+    "/api/auth/setup",
+    rateLimit({
+      windowMs: 15 * 60 * 1000,
+      limit: 10,
+      skip: () => process.env.NODE_ENV === "test",
+      standardHeaders: "draft-8",
+      legacyHeaders: false,
+    }),
+    async (req, res) => {
+      const input = z
+        .object({
+          name: text,
+          email: z.email().transform((v) => v.toLowerCase()),
+          password: z.string().min(12).max(128),
+          setupKey: z.string().min(1).max(256),
+        })
+        .strict()
+        .parse(req.body);
+      const configured = process.env.ADMIN_SETUP_KEY;
+      if (
+        !configured ||
+        !crypto.timingSafeEqual(
+          Buffer.from(hash(configured), "hex"),
+          Buffer.from(hash(input.setupKey), "hex"),
+        )
+      )
+        fail(403, "Invalid setup key");
+      const passwordHash = await bcrypt.hash(input.password, 12);
+      await atomic(async (tx) => {
+        if (await tx.user.count({ where: { role: "ADMIN" } }))
+          fail(409, "First-admin setup is already complete");
+        const user = await tx.user.create({
+          data: {
+            name: input.name,
+            email: input.email,
+            passwordHash,
+            role: "ADMIN",
+          },
+        });
+        await audit(tx, user.id, "USER_CREATED", "User", user.id, {
+          source: "first-admin-web-setup",
+        });
+      });
+      res.status(201).json({ ok: true });
+    },
+  );
   app.post(
     "/api/auth/login",
     rateLimit({
