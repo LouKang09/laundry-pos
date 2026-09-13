@@ -1,0 +1,1 @@
+{"name":"@laundry/client","private":true,"type":"module","scripts":{"dev":"vite --host 0.0.0.0","build":"vite build","preview":"vite preview --host 0.0.0.0"},"dependencies":{"react":"^19.2.0","react-dom":"^19.2.0","react-router-dom":"^7.9.5","lucide-react":"^0.468.0","decimal.js":"^10.6.0"},"devDependencies":{"vite":"^7.2.2","@vitejs/plugin-react":"^5.1.0"}}

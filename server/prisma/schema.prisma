@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  LAUNDRY_STAFF
+}
+
+enum Unit {
+  KG
+  PIECE
+}
+
+enum LaundryStatus {
+  RECEIVED
+  WASHING
+  DRYING
+  FOLDING
+  READY
+  CLAIMED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+}
+
+enum PaymentMethod {
+  CASH
+  GCASH
+}
+
+enum InventoryType {
+  REPLENISHMENT
+  CONSUMPTION
+  ADJUSTMENT
+}
+
+enum NotificationState {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String
+  email                 String                 @unique
+  passwordHash          String
+  role                  Role                   @default(LAUNDRY_STAFF)
+  active                Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  sessions              Session[]
+  orders                Order[]
+  payments              Payment[]
+  statuses              OrderStatusHistory[]
+  inventoryTransactions InventoryTransaction[]
+  expenses              Expense[]
+  auditLogs             AuditLog[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders    Order[]
+
+  @@index([name])
+  @@index([phone])
+}
+
+model Service {
+  id              String                  @id @default(cuid())
+  name            String                  @unique
+  unit            Unit
+  regularPrice    Decimal                 @db.Decimal(12, 2)
+  expressPrice    Decimal                 @db.Decimal(12, 2)
+  minimumQuantity Decimal                 @default(1) @db.Decimal(12, 3)
+  active          Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  items           OrderItem[]
+  inventoryUsage  ServiceInventoryUsage[]
+}
+
+model Order {
+  id                    String                 @id @default(cuid())
+  number                Int                    @unique @default(autoincrement())
+  orderNumber           String                 @unique
+  requestKey            String                 @unique
+  trackingToken         String                 @unique
+  customerId            String
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  customerName          String
+  customerPhone         String
+  userId                String
+  user                  User                   @relation(fields: [userId], references: [id])
+  status                LaundryStatus          @default(RECEIVED)
+  paymentStatus         PaymentStatus          @default(UNPAID)
+  total                 Decimal                @db.Decimal(12, 2)
+  estimatedFrom         DateTime?
+  estimatedTo           DateTime?
+  claimedAt             DateTime?
+  cancellationReason    String?
+  printCount            Int                    @default(0)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  items                 OrderItem[]
+  payment               Payment?
+  statusHistory         OrderStatusHistory[]
+  notifications         Notification[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([createdAt])
+  @@index([status, paymentStatus])
+  @@index([customerId, createdAt])
+}
+
+model OrderItem {
+  id               String  @id @default(cuid())
+  orderId          String
+  order            Order   @relation(fields: [orderId], references: [id])
+  serviceId        String
+  service          Service @relation(fields: [serviceId], references: [id])
+  serviceName      String
+  unit             Unit
+  express          Boolean
+  actualQuantity   Decimal @db.Decimal(12, 3)
+  billableQuantity Decimal @db.Decimal(12, 3)
+  unitPrice        Decimal @db.Decimal(12, 2)
+  total            Decimal @db.Decimal(12, 2)
+
+  @@index([orderId])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  order     Order         @relation(fields: [orderId], references: [id])
+  method    PaymentMethod
+  amount    Decimal       @db.Decimal(12, 2)
+  reference String?       @unique
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime      @default(now())
+
+  @@index([createdAt])
+}
+
+model OrderStatusHistory {
+  id        String         @id @default(cuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id])
+  oldStatus LaundryStatus?
+  newStatus LaundryStatus
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  createdAt DateTime       @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model Notification {
+  id         String            @id @default(cuid())
+  orderId    String
+  order      Order             @relation(fields: [orderId], references: [id])
+  stage      LaundryStatus
+  phone      String
+  message    String
+  state      NotificationState @default(PENDING)
+  attempts   Int               @default(0)
+  providerId String?
+  lastError  String?
+  sentAt     DateTime?
+  createdAt  DateTime          @default(now())
+
+  @@unique([orderId, stage])
+  @@index([state, createdAt])
+}
+
+model InventoryItem {
+  id                String                  @id @default(cuid())
+  name              String                  @unique
+  unit              String
+  stock             Decimal                 @default(0) @db.Decimal(14, 3)
+  lowStockThreshold Decimal                 @default(0) @db.Decimal(14, 3)
+  active            Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  transactions      InventoryTransaction[]
+  serviceUsage      ServiceInventoryUsage[]
+}
+
+model InventoryTransaction {
+  id         String        @id @default(cuid())
+  itemId     String
+  item       InventoryItem @relation(fields: [itemId], references: [id])
+  type       InventoryType
+  quantity   Decimal       @db.Decimal(14, 3)
+  stockAfter Decimal       @db.Decimal(14, 3)
+  reason     String
+  userId     String
+  user       User          @relation(fields: [userId], references: [id])
+  orderId    String?
+  order      Order?        @relation(fields: [orderId], references: [id])
+  createdAt  DateTime      @default(now())
+
+  @@index([itemId, createdAt])
+}
+
+model ServiceInventoryUsage {
+  id              String        @id @default(cuid())
+  serviceId       String
+  service         Service       @relation(fields: [serviceId], references: [id])
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantityPerUnit Decimal       @db.Decimal(14, 3)
+
+  @@unique([serviceId, inventoryItemId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  date        DateTime @db.Date
+  category    String
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
