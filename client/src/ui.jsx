@@ -78,7 +78,78 @@ export function ErrorBox({ message }) {
 export function Empty({ children = "No records yet." }) {
   return <div className="empty">{children}</div>;
 }
+function ServicePriceField({ caption, child }) {
+  const rootRef = useRef(null),
+    totalRef = useRef("");
+  const [total, setTotal] = useState(""),
+    [unitPrice, setUnitPrice] = useState(
+      child.props.defaultValue == null ? "" : String(child.props.defaultValue),
+    );
+  const regular = child.props.name === "regularPrice";
+  const recalculate = (totalValue, quantityValue) => {
+    totalRef.current = totalValue;
+    setTotal(totalValue);
+    const amount = Number(totalValue),
+      quantity = Number(quantityValue);
+    if (amount > 0 && quantity > 0) {
+      setUnitPrice((amount / quantity).toFixed(2));
+    } else if (!totalValue) {
+      setUnitPrice("");
+    }
+  };
+  useEffect(() => {
+    const form = rootRef.current?.closest("form"),
+      minimum = form?.elements?.namedItem("minimumQuantity"),
+      currentUnit = Number(child.props.defaultValue || 0),
+      quantity = Number(minimum?.value || 1);
+    if (currentUnit > 0 && quantity > 0) {
+      const initialTotal = (currentUnit * quantity).toFixed(2);
+      totalRef.current = initialTotal;
+      setTotal(initialTotal);
+    }
+    const handleMinimumChange = (event) => {
+      if (event.target?.name !== "minimumQuantity" || !totalRef.current) return;
+      recalculate(totalRef.current, event.target.value);
+    };
+    form?.addEventListener("input", handleMinimumChange);
+    return () => form?.removeEventListener("input", handleMinimumChange);
+  }, []);
+  return (
+    <label className="field" ref={rootRef}>
+      <span>{regular ? "Regular price" : "Express price"}</span>
+      <small className="muted">
+        Enter the total charge for the minimum billable quantity. The per-unit
+        price is calculated automatically.
+      </small>
+      <input
+        aria-label={`${regular ? "Regular" : "Express"} total for minimum quantity`}
+        type="number"
+        min="0.01"
+        step="0.01"
+        value={total}
+        placeholder="e.g. 220"
+        onChange={(event) => {
+          const form = event.currentTarget.closest("form"),
+            minimum = form?.elements?.namedItem("minimumQuantity");
+          recalculate(event.target.value, minimum?.value || 1);
+        }}
+        required
+      />
+      <small className="muted">Calculated {caption.toLowerCase()}</small>
+      {React.cloneElement(child, {
+        value: unitPrice,
+        readOnly: true,
+        tabIndex: -1,
+        title: "Calculated automatically from the total price and minimum quantity",
+      })}
+    </label>
+  );
+}
 export function Field({ label: caption, children, ...props }) {
+  const priceField =
+    React.isValidElement(children) &&
+    ["regularPrice", "expressPrice"].includes(children.props?.name);
+  if (priceField) return <ServicePriceField caption={caption} child={children} />;
   return (
     <label className="field">
       <span>{caption}</span>
