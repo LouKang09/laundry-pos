@@ -28,22 +28,16 @@ import {
 } from "lucide-react";
 import { api, post, setCsrf } from "./api";
 import { Field, ErrorBox, Loading, SaveButton } from "./ui";
-import {
-  Dashboard,
-  NewOrder,
-  OrderList,
-  Customers,
-  Tracking,
-} from "./operations";
+import { Customers, Tracking } from "./operations";
+import { Dashboard, NewOrder, OrderList } from "./workflow";
 import {
   Inventory,
   Expenses,
-  Reports,
   Services,
-  UserManagement,
-  Logs,
   BusinessSettings,
 } from "./management";
+import { Reports } from "./reporting-page";
+import { UserManagement, Logs } from "./admin-pages";
 import "./styles.css";
 import { Context } from "./context";
 
