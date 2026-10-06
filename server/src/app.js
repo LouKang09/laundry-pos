@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { db, atomic, audit } from "./db.js";
 import { authRoutes, authenticate } from "./auth.js";
 import { orders, publicTracking, business } from "./orders.js";
+import { historicalOrders } from "./historical-orders.js";
 import { staffReceipts } from "./staff-receipts.js";
 import { management } from "./admin.js";
 import { reporting } from "./reports.js";
@@ -141,6 +142,7 @@ app.post("/api/customers", async (req, res) => {
   );
 });
 app.use("/api/orders", staffReceipts);
+app.use("/api/orders", historicalOrders);
 app.use("/api/orders", orders);
 app.use("/api/admin", management);
 app.use("/api", reporting);
