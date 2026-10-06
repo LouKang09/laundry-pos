@@ -376,7 +376,7 @@ test("13 cancellation only Admin, unpaid and Received", async () => {
     reason: "Already paid",
   }).expect(409);
 });
-test("14 expenses, database reports, dashboard and history searches", async () => {
+test("14 expenses, database reports, dashboard and scoped transaction searches", async () => {
   const day = DateTime.now().setZone("Asia/Manila").toISODate();
   await call(admin, ac, "post", "/admin/expenses", {
     date: day,
@@ -407,7 +407,17 @@ test("14 expenses, database reports, dashboard and history searches", async () =
         prefix,
     )
     .expect(200);
-  assert(history.body.rows.length >= 3);
+  assert(history.body.rows.length >= 1);
+  assert(history.body.rows.every((o) => o.status === "CLAIMED"));
+  assert(history.body.rows.some((o) => o.id === unpaid.id));
+  const pickup = await staff.get("/api/orders?view=pickup").expect(200);
+  assert(pickup.body.rows.every((o) => o.status === "READY"));
+  const active = await staff.get("/api/orders?view=orders").expect(200);
+  assert(
+    active.body.rows.every((o) =>
+      ["RECEIVED", "WASHING", "DRYING", "FOLDING"].includes(o.status),
+    ),
+  );
   await admin.get("/api/admin/inventory/history").expect(200);
   await admin.get("/api/admin/logs").expect(200);
 });
@@ -479,11 +489,12 @@ test("20 health and static production route availability", async () => {
     .expect(200);
 });
 
-test("21 simultaneous payment requests produce one payment", async () => {
+test("21 admin cannot create orders; simultaneous payments produce one payment", async () => {
   const body = orderBody([
     { serviceId: piece.id, actualQuantity: "1", express: false },
   ]);
-  const order = (await call(admin, ac, "post", "/orders", body).expect(201))
+  await call(admin, ac, "post", "/orders", body).expect(403);
+  const order = (await call(staff, sc, "post", "/orders", body).expect(201))
     .body;
   const results = await Promise.all([
     call(admin, ac, "post", "/orders/" + order.id + "/payment", {
