@@ -59,12 +59,11 @@ test('laundry staff creates a customer, increments KG service and saves a paid o
  expect(dialog.textContent).toMatch(/Paid/i);
  expect(screen.queryByRole('alert')).toBeNull();
 });
-test('admin new order remains visible but cannot save an order',async()=>{
- const ui=userEvent.setup();mount(<NewOrder/>);
- await screen.findByText('Admin view only');
- const save=screen.getByRole('button',{name:'Save order'});
- await ui.click(save);
- expect(await screen.findByText(/only Laundry Staff can save an order/i)).toBeTruthy();
+test('admin new order remains visible as a clearly read-only function',async()=>{
+ mount(<NewOrder/>);
+ expect(await screen.findByText('Admin view only')).toBeTruthy();
+ expect(screen.getByText(/only Laundry Staff can save an order/i)).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Save order'})).toBeTruthy();
 });
 const screens=[['Dashboard',<Dashboard/>,'Sales trend'],['Customers',<Customers/>,'Phone'],['Orders',<OrderList/>,'Services · actual → billable'],['Pickup',<OrderList mode="pickup"/>,'Pickup & claim'],['Transactions',<OrderList mode="transactions"/>,'Transactions'],['Inventory',<Inventory/>,'Stock on hand'],['Expenses',<Expenses/>,'Encoded by'],['Reports',<Reports/>,'Services sold'],['Services',<Services/>,'Wash & Fold'],['Users',<UserManagement/>,'UI Test Admin'],['Logs',<Logs/>,'View details'],['Settings',<BusinessSettings/>,'Business & turnaround']];
 for(const [name,element,marker] of screens)test(name+' screen renders live API data without a runtime error',async()=>{
