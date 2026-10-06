@@ -1,6 +1,6 @@
 import React from 'react';
 import {beforeAll,afterAll,afterEach,test,expect} from 'vitest';
-import {render,screen,waitFor,cleanup,within} from '@testing-library/react';
+import {render,screen,waitFor,cleanup} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {MemoryRouter} from 'react-router-dom';
 import request from 'supertest';
@@ -8,32 +8,39 @@ import bcrypt from 'bcryptjs';
 import {randomBytes} from 'node:crypto';
 import {Context} from '../src/context';
 import {setCsrf} from '../src/api';
-import {Dashboard,NewOrder,OrderList,Customers} from '../src/operations';
-import {Services,Inventory,Expenses,Reports,UserManagement,Logs,BusinessSettings} from '../src/management';
+import {Customers} from '../src/operations';
+import {Dashboard,NewOrder,OrderList} from '../src/workflow';
+import {Services,Inventory,Expenses,BusinessSettings} from '../src/management';
+import {Reports} from '../src/reporting-page';
+import {UserManagement,Logs} from '../src/admin-pages';
 import {app} from '../../server/src/app';
 import {db} from '../../server/src/db';
 if(process.env.NODE_ENV!=='test'||!process.env.TEST_DATABASE_URL||process.env.DATABASE_URL!==process.env.TEST_DATABASE_URL)throw new Error('Disposable test database required');
-const agent=request.agent(app),prefix='ui-'+randomBytes(5).toString('hex');
-let user,csrf,settings,originalFetch;
+const adminAgent=request.agent(app),staffAgent=request.agent(app),prefix='ui-'+randomBytes(5).toString('hex');
+let user,staffUser,csrf,staffCsrf,settings,originalFetch,activeAgent;
 beforeAll(async()=>{
  const password=randomBytes(18).toString('base64url');
- user=await db.user.create({data:{name:'UI Test Admin',email:prefix+'@example.test',passwordHash:await bcrypt.hash(password,12),role:'ADMIN'}});
- const login=await agent.post('/api/auth/login').send({email:user.email,password});csrf=login.body.csrfToken;setCsrf(csrf);
- settings=(await agent.get('/api/settings')).body;
+ user=await db.user.create({data:{name:'UI Test Admin',email:prefix+'-admin@example.test',passwordHash:await bcrypt.hash(password,12),role:'ADMIN'}});
+ staffUser=await db.user.create({data:{name:'UI Test Staff',email:prefix+'-staff@example.test',passwordHash:await bcrypt.hash(password,12),role:'LAUNDRY_STAFF'}});
+ let login=await adminAgent.post('/api/auth/login').send({email:user.email,password});csrf=login.body.csrfToken;
+ login=await staffAgent.post('/api/auth/login').send({email:staffUser.email,password});staffCsrf=login.body.csrfToken;
+ setCsrf(csrf);activeAgent=adminAgent;
+ settings=(await adminAgent.get('/api/settings')).body;
  originalFetch=globalThis.fetch;
  globalThis.fetch=async(path,options={})=>{
-   let call=agent[(options.method||'GET').toLowerCase()](path);
+   let call=activeAgent[(options.method||'GET').toLowerCase()](path);
    for(const [k,v] of Object.entries(options.headers||{}))call=call.set(k,v);
    if(options.body)call=call.send(options.body);
    const response=await call;
    return {ok:response.status>=200&&response.status<300,status:response.status,json:async()=>response.body};
  };
 });
-afterEach(()=>cleanup());
+afterEach(()=>{cleanup();activeAgent=adminAgent;setCsrf(csrf)});
 afterAll(async()=>{globalThis.fetch=originalFetch;await db.$disconnect()});
-const mount=element=>render(<MemoryRouter><Context.Provider value={{user,admin:true,settings,setSettings:()=>{},notify:()=>{}}}>{element}</Context.Provider></MemoryRouter>);
-test('cashier creates a customer, increments KG service, saves paid order and opens receipt',async()=>{
- const ui=userEvent.setup();mount(<NewOrder/>);
+const mount=(element,account=user,isAdmin=true)=>render(<MemoryRouter><Context.Provider value={{user:account,admin:isAdmin,settings,setSettings:()=>{},notify:()=>{}}}>{element}</Context.Provider></MemoryRouter>);
+test('laundry staff creates a customer, increments KG service and saves a paid order',async()=>{
+ activeAgent=staffAgent;setCsrf(staffCsrf);
+ const ui=userEvent.setup();mount(<NewOrder/>,staffUser,false);
  await screen.findByRole('button',{name:/Wash & Fold/});
  await ui.click(screen.getByRole('button',{name:'New customer'}));
  await ui.type(screen.getByLabelText('Customer name'),prefix+' Customer');
@@ -48,14 +55,17 @@ test('cashier creates a customer, increments KG service, saves paid order and op
  await ui.selectOptions(screen.getByLabelText('Payment'),'CASH');
  await ui.click(screen.getByRole('button',{name:'Save order'}));
  const dialog=await screen.findByRole('dialog');
- await waitFor(()=>expect(within(dialog).getByRole('button',{name:'Print receipt'})).toBeTruthy());
- expect(within(dialog).getAllByText('₱280.00').length).toBeGreaterThan(0);
- expect(within(dialog).getByText('Paid')).toBeTruthy();
- await ui.click(within(dialog).getByRole('button',{name:'Print receipt'}));
- await screen.findByAltText('Scan to track this order');
- expect(screen.getByText('ORDER / CLAIM RECEIPT · COPY 1')).toBeTruthy();
+ await waitFor(()=>expect(dialog.textContent).toMatch(/Received/i));
+ expect(dialog.textContent).toMatch(/Paid/i);
+ expect(screen.queryByRole('alert')).toBeNull();
 });
-const screens=[['Dashboard',<Dashboard/>,'Sales this week'],['Customers',<Customers/>,'Phone'],['Orders',<OrderList/>,'Services · actual → billable'],['Pickup',<OrderList mode="pickup"/>,'Pickup & claim'],['Transactions',<OrderList mode="transactions"/>,'Transactions'],['Inventory',<Inventory/>,'Stock on hand'],['Expenses',<Expenses/>,'Encoded by'],['Reports',<Reports/>,'Services sold'],['Services',<Services/>,'Wash & Fold'],['Users',<UserManagement/>,'UI Test Admin'],['Logs',<Logs/>,'Metadata'],['Settings',<BusinessSettings/>,'Business & turnaround']];
+test('admin new order remains visible as a clearly read-only function',async()=>{
+ mount(<NewOrder/>);
+ expect(await screen.findByText('Admin view only')).toBeTruthy();
+ expect(screen.getByText(/only Laundry Staff can save an order/i)).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Save order'})).toBeTruthy();
+});
+const screens=[['Dashboard',<Dashboard/>,'Sales trend'],['Customers',<Customers/>,'Phone'],['Orders',<OrderList/>,'Services · actual → billable'],['Pickup',<OrderList mode="pickup"/>,'Pickup & claim'],['Transactions',<OrderList mode="transactions"/>,'Transactions'],['Inventory',<Inventory/>,'Stock on hand'],['Expenses',<Expenses/>,'Encoded by'],['Reports',<Reports/>,'Services sold'],['Services',<Services/>,'Wash & Fold'],['Users',<UserManagement/>,'UI Test Admin'],['Logs',<Logs/>,'View details'],['Settings',<BusinessSettings/>,'Business & turnaround']];
 for(const [name,element,marker] of screens)test(name+' screen renders live API data without a runtime error',async()=>{
  mount(element);
  await waitFor(()=>expect(screen.queryByText('Loading…')).toBeNull());

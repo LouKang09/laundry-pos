@@ -94,6 +94,8 @@ async function consume(tx, order, userId) {
   }
 }
 orders.post("/", async (req, res) => {
+  if (req.user.role !== "LAUNDRY_STAFF")
+    fail(403, "Only Laundry Staff can create and save new orders");
   const data = orderSchema.parse(req.body);
   const result = await atomic(async (tx) => {
     const existing = await tx.order.findUnique({
@@ -168,12 +170,46 @@ orders.get("/", async (req, res) => {
       .string()
       .max(200)
       .parse(req.query.q || ""),
-    page = pageNumber.parse(req.query.page);
-  const status = req.query.status
+    page = pageNumber.parse(req.query.page),
+    view = z
+      .enum(["orders", "pickup", "transactions", "customer"])
+      .parse(req.query.view || "orders");
+  const requestedStatus = req.query.status
     ? z.enum([...workflow, "CANCELLED"]).parse(req.query.status)
     : undefined;
+  const cfg = await business(),
+    from = DateTime.now().setZone(cfg.timezone).startOf("day"),
+    to = from.plus({ days: 1 }),
+    today = { gte: from.toJSDate(), lt: to.toJSDate() },
+    staffToday = req.user.role === "LAUNDRY_STAFF";
+  let scope = {};
+  if (view === "orders") {
+    const active = ["RECEIVED", "WASHING", "DRYING", "FOLDING"];
+    if (requestedStatus && !active.includes(requestedStatus))
+      fail(400, "That status is not shown in Orders");
+    scope = {
+      status: requestedStatus || { in: active },
+      ...(staffToday ? { createdAt: today } : {}),
+    };
+  } else if (view === "pickup") {
+    if (requestedStatus && requestedStatus !== "READY")
+      fail(400, "Pickup only shows Ready orders");
+    scope = { status: "READY" };
+  } else if (view === "transactions") {
+    if (requestedStatus && requestedStatus !== "CLAIMED")
+      fail(400, "Transactions only shows Claimed orders");
+    scope = {
+      status: "CLAIMED",
+      ...(staffToday ? { claimedAt: today } : {}),
+    };
+  } else {
+    scope = {
+      ...(requestedStatus ? { status: requestedStatus } : {}),
+      ...(staffToday ? { createdAt: today } : {}),
+    };
+  }
   const where = {
-    status,
+    ...scope,
     ...(req.query.customerId
       ? { customerId: String(req.query.customerId) }
       : {}),
@@ -183,7 +219,7 @@ orders.get("/", async (req, res) => {
             { orderNumber: { contains: q, mode: "insensitive" } },
             { customerName: { contains: q, mode: "insensitive" } },
             { customerPhone: { contains: q.replace(/[ ()-]/g, "") || q } },
-            { trackingToken: q.replace(/^.*\/track\//, "") },
+            { trackingToken: q.replace(/^.*\/track\//, "").toLowerCase() },
           ],
         }
       : {}),
@@ -192,7 +228,10 @@ orders.get("/", async (req, res) => {
     db.order.findMany({
       where,
       include: orderInclude,
-      orderBy: { createdAt: "desc" },
+      orderBy:
+        view === "transactions"
+          ? [{ claimedAt: "desc" }, { createdAt: "desc" }]
+          : { createdAt: "desc" },
       take: 30,
       skip: (page - 1) * 30,
     }),
@@ -201,14 +240,40 @@ orders.get("/", async (req, res) => {
   await audit(
     db,
     req.user.id,
-    req.query.view === "transactions"
-      ? "TRANSACTION_VIEWED"
-      : "ORDER_LIST_VIEWED",
+    view === "transactions" ? "TRANSACTION_VIEWED" : "ORDER_LIST_VIEWED",
     "Order",
     undefined,
-    { page, filtered: !!q },
+    { page, filtered: !!q, view },
   );
-  res.json({ rows, total, page });
+  res.json({ rows, total, page, view });
+});
+orders.get("/scan/:token", async (req, res) => {
+  const token = z
+    .string()
+    .regex(/^[a-f0-9]{48}$/i)
+    .transform((v) => v.toLowerCase())
+    .parse(req.params.token);
+  const o = await db.order.findUnique({
+    where: { trackingToken: token },
+    select: {
+      id: true,
+      orderNumber: true,
+      customerName: true,
+      status: true,
+      paymentStatus: true,
+    },
+  });
+  if (!o) fail(404, "Order QR was not found");
+  const index = workflow.indexOf(o.status),
+    nextStatus = index >= 0 && index < workflow.length - 1 ? workflow[index + 1] : null;
+  res.json({
+    ...o,
+    nextStatus,
+    blockedReason:
+      nextStatus === "CLAIMED" && o.paymentStatus !== "PAID"
+        ? "Receive full payment before claiming this order."
+        : null,
+  });
 });
 orders.get("/:id", async (req, res) => {
   const o = await getOrder(db, req.params.id);
