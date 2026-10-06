@@ -15,6 +15,7 @@ import {
   Users,
   PackageCheck,
   ReceiptText,
+  Printer,
   Boxes,
   Wallet,
   ChartNoAxesCombined,
@@ -38,6 +39,7 @@ import {
 } from "./management";
 import { Reports } from "./reporting-page";
 import { UserManagement, Logs } from "./admin-pages";
+import { ReceiptCenter } from "./receipt-center";
 import "./styles.css";
 import { Context } from "./context";
 
@@ -48,6 +50,7 @@ const nav = [
   ["/customers", "Customers", Users],
   ["/pickup", "Pickup", PackageCheck],
   ["/transactions", "Transactions", ReceiptText],
+  ["/receipts", "Receipt Center", Printer],
   ["/inventory", "Inventory", Boxes, true],
   ["/expenses", "Expenses", Wallet, true],
   ["/reports", "Reports", ChartNoAxesCombined, true],
@@ -235,7 +238,7 @@ function Shell() {
               .filter((n) => !n[3] || admin)
               .map(([to, title, Icon], i) => (
                 <React.Fragment key={to}>
-                  {i === 6 && <p className="navlabel">MANAGEMENT</p>}
+                  {i === 7 && <p className="navlabel">MANAGEMENT</p>}
                   <NavLink
                     to={to}
                     end={to === "/"}
@@ -302,6 +305,7 @@ function Shell() {
                 path="/transactions"
                 element={<OrderList mode="transactions" />}
               />
+              <Route path="/receipts" element={<ReceiptCenter />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/inventory" element={guarded(<Inventory />)} />
               <Route path="/expenses" element={guarded(<Expenses />)} />
