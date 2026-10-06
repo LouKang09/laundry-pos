@@ -31,6 +31,7 @@ import { api, post, setCsrf } from "./api";
 import { Field, ErrorBox, Loading, SaveButton } from "./ui";
 import { Customers, Tracking } from "./operations";
 import { Dashboard, NewOrder, OrderList } from "./workflow";
+import { AdminHistoricalOrder } from "./admin-historical-order";
 import {
   Inventory,
   Expenses,
@@ -245,7 +246,7 @@ function Shell() {
                     onClick={() => setOpen(false)}
                   >
                     <Icon size={19} />
-                    <span>{title}</span>
+                    <span>{admin && to === "/new" ? "Manual Add" : title}</span>
                     {to === "/new" && <kbd>+</kbd>}
                   </NavLink>
                 </React.Fragment>
@@ -298,7 +299,10 @@ function Shell() {
           <main>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/new" element={<NewOrder />} />
+              <Route
+                path="/new"
+                element={admin ? <AdminHistoricalOrder /> : <NewOrder />}
+              />
               <Route path="/orders" element={<OrderList />} />
               <Route path="/pickup" element={<OrderList mode="pickup" />} />
               <Route
