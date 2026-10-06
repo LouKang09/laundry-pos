@@ -494,6 +494,11 @@ test("21 admin cannot create orders; simultaneous payments produce one payment",
     { serviceId: piece.id, actualQuantity: "1", express: false },
   ]);
   await call(admin, ac, "post", "/orders", body).expect(403);
+  const login = await staff
+    .post("/api/auth/login")
+    .send({ email: staffUser.email, password })
+    .expect(200);
+  sc = login.body.csrfToken;
   const order = (await call(staff, sc, "post", "/orders", body).expect(201))
     .body;
   const results = await Promise.all([
