@@ -46,7 +46,15 @@ function Receipt({ data: o, onClose }) {
             <p>
               Actual: {i.actualQuantity} {i.unit}
               <br />
-              Billable: {i.billableQuantity} {i.unit} × {cash(i.unitPrice)}
+              {i.pricingLabel ? (
+                <>
+                  Pricing: {i.pricingLabel}
+                  <br />
+                  Charged capacity: {i.billableQuantity} {i.unit}
+                </>
+              ) : (
+                <>Billable: {i.billableQuantity} {i.unit} × {cash(i.unitPrice)}</>
+              )}
               <b className="right">{cash(i.total)}</b>
             </p>
           </div>

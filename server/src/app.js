@@ -10,6 +10,7 @@ import { authRoutes, authenticate } from "./auth.js";
 import { orders, publicTracking, business } from "./orders.js";
 import { historicalOrders } from "./historical-orders.js";
 import { staffReceipts } from "./staff-receipts.js";
+import { servicePricing } from "./service-pricing.js";
 import { management } from "./admin.js";
 import { reporting } from "./reports.js";
 import { z, customerSchema, pageNumber } from "./validation.js";
@@ -144,6 +145,7 @@ app.post("/api/customers", async (req, res) => {
 app.use("/api/orders", staffReceipts);
 app.use("/api/orders", historicalOrders);
 app.use("/api/orders", orders);
+app.use("/api/admin", servicePricing);
 app.use("/api/admin", management);
 app.use("/api", reporting);
 app.use("/api", (req, res) =>

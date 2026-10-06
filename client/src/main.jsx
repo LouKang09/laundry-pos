@@ -30,14 +30,15 @@ import {
 import { api, post, setCsrf } from "./api";
 import { Field, ErrorBox, Loading, SaveButton } from "./ui";
 import { Customers, Tracking } from "./operations";
-import { Dashboard, NewOrder, OrderList } from "./workflow";
-import { AdminHistoricalOrder } from "./admin-historical-order";
+import { Dashboard, OrderList } from "./workflow";
+import { PosOrder } from "./pos-order-loads";
+import { AdminHistoricalOrder } from "./admin-historical-load-order";
 import {
   Inventory,
   Expenses,
-  Services,
   BusinessSettings,
 } from "./management";
+import { Services } from "./services-load-pricing";
 import { Reports } from "./reporting-page";
 import { UserManagement, Logs } from "./admin-pages";
 import { ReceiptCenter } from "./receipt-center";
@@ -301,7 +302,7 @@ function Shell() {
               <Route path="/" element={<Dashboard />} />
               <Route
                 path="/new"
-                element={admin ? <AdminHistoricalOrder /> : <NewOrder />}
+                element={admin ? <AdminHistoricalOrder /> : <PosOrder />}
               />
               <Route path="/orders" element={<OrderList />} />
               <Route path="/pickup" element={<OrderList mode="pickup" />} />
