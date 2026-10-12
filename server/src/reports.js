@@ -142,22 +142,36 @@ reporting.get("/dashboard", async (req, res) => {
   const cfg = await business(),
     now = DateTime.now().setZone(cfg.timezone),
     currentDate = now.toISODate(),
-    selectedDate = z.iso.date().parse(req.query.date || currentDate),
-    from = DateTime.fromISO(selectedDate, { zone: cfg.timezone }).startOf("day"),
-    to = from.plus({ days: 1 });
+    hasRange = req.query.from != null || req.query.to != null;
 
-  if (from > now.startOf("day")) fail(400, "Dashboard date cannot be in the future");
+  let selectedFrom, selectedTo, from, to, selectedDate;
+  if (hasRange) {
+    selectedFrom = z.iso.date().parse(req.query.from);
+    selectedTo = z.iso.date().parse(req.query.to);
+    ({ from, to } = customRange(selectedFrom, selectedTo, cfg.timezone));
+  } else {
+    selectedDate = z.iso.date().parse(req.query.date || currentDate);
+    from = DateTime.fromISO(selectedDate, { zone: cfg.timezone }).startOf("day");
+    to = from.plus({ days: 1 });
+    selectedFrom = selectedDate;
+    selectedTo = selectedDate;
+  }
+
+  if (from > now.startOf("day") || to > now.startOf("day").plus({ days: 1 }))
+    fail(400, "Dashboard date range cannot include a future date");
 
   const selectedRange = { gte: from.toJSDate(), lt: to.toJSDate() },
     staff = req.user.role === "LAUNDRY_STAFF",
-    isToday = selectedDate === currentDate,
+    isToday = !hasRange && selectedDate === currentDate,
     currentAdminOperations = req.user.role === "ADMIN" && isToday,
     statusWhere = currentAdminOperations ? {} : { createdAt: selectedRange },
     unpaidWhere = {
       paymentStatus: "UNPAID",
       status: { not: "CANCELLED" },
       ...(currentAdminOperations ? {} : { createdAt: selectedRange }),
-    };
+    },
+    trendFrom =
+      req.user.role === "ADMIN" && !hasRange ? from.minus({ days: 6 }) : from;
 
   const [
     selected,
@@ -176,25 +190,29 @@ reporting.get("/dashboard", async (req, res) => {
       _sum: { total: true },
       _count: true,
     }),
-    db.order.groupBy({ by: ["status"], where: statusWhere, _count: true }),
+    currentAdminOperations
+      ? db.order.groupBy({ by: ["status"], where: statusWhere, _count: true })
+      : Promise.resolve([]),
     db.order.count({ where: { claimedAt: selectedRange } }),
-    db.order.count({ where: unpaidWhere }),
+    currentAdminOperations
+      ? db.order.count({ where: unpaidWhere })
+      : Promise.resolve(0),
     req.user.role === "ADMIN"
       ? db.inventoryItem.findMany({ where: { active: true } })
       : Promise.resolve([]),
-    report(req.user.role === "ADMIN" ? from.minus({ days: 6 }) : from, to),
-    !isToday
-      ? db.order.findMany({
+    report(trendFrom, to),
+    currentAdminOperations
+      ? Promise.resolve([])
+      : db.order.findMany({
           where: { createdAt: selectedRange },
           select: { id: true },
-        })
-      : Promise.resolve([]),
+        }),
   ]);
 
-  let statuses = Object.fromEntries(groups.map((g) => [g.status, g._count])),
+  let statuses = Object.fromEntries(groups.map((group) => [group.status, group._count])),
     unpaidOrders = currentUnpaid;
 
-  if (!isToday && cohortOrders.length) {
+  if (!currentAdminOperations && cohortOrders.length) {
     const ids = cohortOrders.map((order) => order.id),
       [history, payments] = await Promise.all([
         db.orderStatusHistory.findMany({
@@ -216,6 +234,7 @@ reporting.get("/dashboard", async (req, res) => {
 
     const lastStatus = new Map();
     for (const event of history) lastStatus.set(event.orderId, event.newStatus);
+
     statuses = {};
     for (const order of cohortOrders) {
       const status = lastStatus.get(order.id) || "RECEIVED";
@@ -244,12 +263,17 @@ reporting.get("/dashboard", async (req, res) => {
         ? inventory.filter((item) => item.stock.lte(item.lowStockThreshold)).length
         : null,
     trend: trendData.trend,
-    dashboardScope: isToday
-      ? staff
-        ? "TODAY"
-        : "BUSINESS"
-      : "BACKDATE",
-    viewDate: selectedDate,
+    dashboardScope: hasRange
+      ? "CUSTOM_RANGE"
+      : isToday
+        ? staff
+          ? "TODAY"
+          : "BUSINESS"
+        : "BACKDATE",
+    viewDate: selectedDate || null,
+    from: selectedFrom,
+    to: selectedTo,
+    isRange: hasRange,
     isToday,
     timezone: cfg.timezone,
   });

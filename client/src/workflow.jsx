@@ -196,21 +196,46 @@ function ReportPrintControls() {
 
 export function Dashboard() {
   const [rev, setRev] = useState(0),
-    [viewDate, setViewDate] = useState(today());
-  const { data: d, error, loading } = useData(
-    "/dashboard?date=" + encodeURIComponent(viewDate),
-    rev,
-  );
+    [viewMode, setViewMode] = useState("single"),
+    [viewDate, setViewDate] = useState(today()),
+    [rangeFrom, setRangeFrom] = useState(today()),
+    [rangeTo, setRangeTo] = useState(today());
+
+  const path =
+    viewMode === "range"
+      ? "/dashboard?from=" +
+        encodeURIComponent(rangeFrom) +
+        "&to=" +
+        encodeURIComponent(rangeTo)
+      : "/dashboard?date=" + encodeURIComponent(viewDate);
+  const { data: d, error, loading } = useData(path, rev);
   const { user, admin } = useApp();
-  const isTodayView = viewDate === today(),
-    viewLabel = isTodayView ? "Today" : prettyDay(viewDate);
+
+  const isTodayView = viewMode === "single" && viewDate === today(),
+    isRangeView = viewMode === "range",
+    viewLabel = isRangeView
+      ? rangeFrom === rangeTo
+        ? prettyDay(rangeFrom)
+        : `${prettyDay(rangeFrom)} – ${prettyDay(rangeTo)}`
+      : isTodayView
+        ? "Today"
+        : prettyDay(viewDate),
+    endLabel = isRangeView ? prettyDay(rangeTo) : viewLabel;
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (viewDate === today()) setRev((v) => v + 1);
+      if (isTodayView) setRev((v) => v + 1);
     }, 30000);
     return () => clearInterval(id);
-  }, [viewDate]);
+  }, [isTodayView]);
+
+  const goToday = () => {
+    const current = today();
+    setViewMode("single");
+    setViewDate(current);
+    setRangeFrom(current);
+    setRangeTo(current);
+  };
 
   const stageCard = (status) => {
     const content = (
@@ -232,7 +257,11 @@ export function Dashboard() {
       <div
         className={"stage-card " + status.toLowerCase()}
         key={status}
-        title={"Historical end-of-day snapshot for " + viewLabel}
+        title={
+          isRangeView
+            ? "End-of-range snapshot as of " + endLabel
+            : "Historical end-of-day snapshot for " + viewLabel
+        }
       >
         {content}
       </div>
@@ -245,18 +274,54 @@ export function Dashboard() {
         title={`Good ${new Date().getHours() < 12 ? "morning" : "day"}, ${user.name.split(" ")[0]}`}
       >
         <div className="filters" style={{ margin: 0 }}>
-          <span className="muted" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-            <CalendarDays size={16} /> View date
+          <span
+            className="muted"
+            style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+          >
+            <CalendarDays size={16} /> Dashboard view
           </span>
-          <input
-            aria-label="Dashboard view date"
-            type="date"
-            value={viewDate}
-            max={today()}
-            onChange={(e) => setViewDate(e.target.value || today())}
-          />
+          <select
+            aria-label="Dashboard date mode"
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+          >
+            <option value="single">Single date</option>
+            <option value="range">Custom range</option>
+          </select>
+          {isRangeView ? (
+            <>
+              <input
+                aria-label="Dashboard range start"
+                type="date"
+                value={rangeFrom}
+                max={today()}
+                onChange={(e) => {
+                  const next = e.target.value || today();
+                  setRangeFrom(next);
+                  if (rangeTo < next) setRangeTo(next);
+                }}
+              />
+              <span className="muted">to</span>
+              <input
+                aria-label="Dashboard range end"
+                type="date"
+                value={rangeTo}
+                min={rangeFrom}
+                max={today()}
+                onChange={(e) => setRangeTo(e.target.value || rangeFrom)}
+              />
+            </>
+          ) : (
+            <input
+              aria-label="Dashboard view date"
+              type="date"
+              value={viewDate}
+              max={today()}
+              onChange={(e) => setViewDate(e.target.value || today())}
+            />
+          )}
           {!isTodayView && (
-            <button className="secondary" onClick={() => setViewDate(today())}>
+            <button className="secondary" onClick={goToday}>
               Today
             </button>
           )}
@@ -271,19 +336,22 @@ export function Dashboard() {
 
       {!isTodayView && (
         <section className="panel" style={{ marginBottom: 16 }}>
-          <strong>Backdate view · {viewLabel}</strong>
+          <strong>
+            {isRangeView ? "Custom range" : "Backdate view"} · {viewLabel}
+          </strong>
           <p className="muted" style={{ marginBottom: 0 }}>
-            Sales, orders, claims, and workflow stages below are reconstructed for
-            this date. Stage cards show the end-of-day snapshot and do not open
-            the current Orders queue.
+            {isRangeView
+              ? `Sales, orders, and claims are totaled across this range. Workflow stages and unpaid orders show the snapshot at the end of ${endLabel}.`
+              : "Sales, orders, claims, and workflow stages below are reconstructed for this date. Stage cards show the end-of-day snapshot and do not open the current Orders queue."}
           </p>
         </section>
       )}
 
       {!admin && isTodayView && (
         <p className="muted">
-          Dashboard defaults to today. Use View date above to review a previous
-          day. Pickup continues to show all Ready and unclaimed orders.
+          Dashboard defaults to today. Use Dashboard view above for a previous
+          date or a custom date range. Pickup continues to show all Ready and
+          unclaimed orders.
         </p>
       )}
 
@@ -295,16 +363,30 @@ export function Dashboard() {
           <>
             <div className="summary-grid">
               <div className="stat hero-stat">
-                <span>{isTodayView ? "Today's sales" : `Sales · ${viewLabel}`}</span>
+                <span>
+                  {isTodayView
+                    ? "Today's sales"
+                    : isRangeView
+                      ? `Sales · ${viewLabel}`
+                      : `Sales · ${viewLabel}`}
+                </span>
                 <h2>{cash(d.todaySales)}</h2>
                 <small>
                   {isTodayView
                     ? "Orders received today · excludes cancellations"
-                    : `Orders received ${viewLabel} · excludes cancellations`}
+                    : isRangeView
+                      ? `Orders received across ${viewLabel} · excludes cancellations`
+                      : `Orders received ${viewLabel} · excludes cancellations`}
                 </small>
               </div>
               <Stat
-                title={isTodayView ? "Today's orders" : `Orders · ${viewLabel}`}
+                title={
+                  isTodayView
+                    ? "Today's orders"
+                    : isRangeView
+                      ? "Orders in range"
+                      : `Orders · ${viewLabel}`
+                }
                 value={d.todayOrders}
               />
               <Stat
@@ -313,7 +395,9 @@ export function Dashboard() {
                     ? admin
                       ? "Active orders"
                       : "Today's active orders"
-                    : "Active at day end"
+                    : isRangeView
+                      ? "Active at range end"
+                      : "Active at day end"
                 }
                 value={d.activeOrders}
               />
@@ -323,7 +407,9 @@ export function Dashboard() {
                     ? admin
                       ? "Ready for pickup"
                       : "Ready today"
-                    : "Ready at day end"
+                    : isRangeView
+                      ? "Ready at range end"
+                      : "Ready at day end"
                 }
                 value={d.statuses.READY || 0}
                 accent
@@ -337,10 +423,16 @@ export function Dashboard() {
                     ? admin
                       ? "On the floor"
                       : "Today's work"
-                    : `End-of-day stage · ${viewLabel}`}
+                    : isRangeView
+                      ? `End-of-range stage · ${endLabel}`
+                      : `End-of-day stage · ${viewLabel}`}
                 </h2>
                 {!isTodayView && (
-                  <span className="muted">Historical workflow snapshot</span>
+                  <span className="muted">
+                    {isRangeView
+                      ? `Orders received in the selected range, as of ${endLabel}`
+                      : "Historical workflow snapshot"}
+                  </span>
                 )}
               </div>
               {isTodayView && (
@@ -360,7 +452,9 @@ export function Dashboard() {
                     <span className="muted">
                       {isTodayView
                         ? "Connected daily graph · last 7 days"
-                        : `7-day trend ending ${viewLabel}`}
+                        : isRangeView
+                          ? `Selected range · ${viewLabel}`
+                          : `7-day trend ending ${viewLabel}`}
                     </span>
                   </div>
                 </div>
@@ -379,7 +473,13 @@ export function Dashboard() {
 
             <div className="quick-stats">
               <Stat
-                title={isTodayView ? "Claimed today" : `Claimed · ${viewLabel}`}
+                title={
+                  isTodayView
+                    ? "Claimed today"
+                    : isRangeView
+                      ? "Claimed in range"
+                      : `Claimed · ${viewLabel}`
+                }
                 value={d.claimedToday}
               />
               <Stat
@@ -388,11 +488,18 @@ export function Dashboard() {
                     ? admin
                       ? "Unpaid orders"
                       : "Today's unpaid orders"
-                    : "Unpaid at day end"
+                    : isRangeView
+                      ? "Unpaid at range end"
+                      : "Unpaid at day end"
                 }
                 value={d.unpaidOrders}
               />
-              {admin && <Stat title="Low inventory" value={d.lowInventory} />}
+              {admin && (
+                <Stat
+                  title={isTodayView ? "Low inventory" : "Low inventory now"}
+                  value={d.lowInventory}
+                />
+              )}
             </div>
           </>
         )
