@@ -18,6 +18,7 @@ import {
 import Decimal from "decimal.js";
 import { api, post } from "./api";
 import { useApp } from "./context";
+import { OFFICIAL_LOGO } from "./brand";
 import {
   useData,
   PageHead,
@@ -1005,6 +1006,7 @@ function Receipt({ data: o, onClose }) {
         </button>
       </div>
       <article className="receipt">
+        <img className="receipt-brand-logo" src={OFFICIAL_LOGO} alt="" />
         <h2>{o.business.name}</h2>
         <p>ORDER / CLAIM RECEIPT · COPY {o.copy}</p>
         <h3>{o.orderNumber}</h3>
@@ -1142,8 +1144,8 @@ export function Tracking() {
   return (
     <div className="tracking">
       <div className="tracking-card">
-        <span className="brand-symbol">
-          <Waves size={30} />
+        <span className="brand-mark brand-mark-tracking">
+          <img src={OFFICIAL_LOGO} alt="Laundry POS logo" />
         </span>
         <p className="eyebrow">LAUNDRY TRACKING</p>
         <ErrorBox message={error} />

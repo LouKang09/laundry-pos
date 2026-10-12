@@ -1,3 +1,4 @@
+import { OFFICIAL_LOGO } from "./brand";
 const esc = (value) =>
   String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -65,7 +66,7 @@ export async function printReport(api, filters, businessName) {
   header{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #172033;padding-bottom:14px;margin-bottom:18px}
   h1,h2,p{margin:0} h1{font-size:24px} h2{font-size:15px;margin:22px 0 8px}.muted{color:#657087}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.card{border:1px solid #d8dde7;border-radius:8px;padding:11px}.card span{display:block;color:#657087}.card strong{font-size:18px;display:block;margin-top:4px}table{width:100%;border-collapse:collapse;margin-top:6px}th,td{border:1px solid #d8dde7;padding:7px;text-align:left;vertical-align:top}th{background:#f4f6f9}footer{margin-top:22px;border-top:1px solid #d8dde7;padding-top:10px;color:#657087}@page{size:auto;margin:14mm}@media print{body{padding:0}.no-print{display:none}}
 </style></head><body>
-<header><div><h1>${esc(businessName || "Laundry POS")}</h1><p class="muted">${esc(title)}</p></div><div><strong>${esc(displayDate(data.from, data.timezone))} – ${esc(endLabel)}</strong><p class="muted">${esc(data.timezone)}</p></div></header>
+<header><div><img src="${OFFICIAL_LOGO}" alt="" style="width:52px;height:52px;object-fit:contain;margin-bottom:8px"><h1>${esc(businessName || "Laundry POS")}</h1><p class="muted">${esc(title)}</p></div><div><strong>${esc(displayDate(data.from, data.timezone))} – ${esc(endLabel)}</strong><p class="muted">${esc(data.timezone)}</p></div></header>
 <div class="summary">
   <div class="card"><span>Gross sales</span><strong>${esc(peso(data.grossSales))}</strong></div>
   <div class="card"><span>Orders</span><strong>${esc(data.orders)}</strong></div>

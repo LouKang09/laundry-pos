@@ -24,7 +24,6 @@ import {
   ScrollText,
   Settings,
   LogOut,
-  Waves,
   Menu,
 } from "lucide-react";
 import { api, post, setCsrf } from "./api";
@@ -44,6 +43,9 @@ import { UserManagement, Logs } from "./admin-pages";
 import { ReceiptCenter } from "./receipt-center";
 import "./styles.css";
 import { Context } from "./context";
+import { OFFICIAL_LOGO, installBrandIcon } from "./brand";
+
+installBrandIcon();
 
 const nav = [
   ["/", "Dashboard", LayoutDashboard],
@@ -75,9 +77,9 @@ function Login({ onLogin }) {
   return (
     <div className="login">
       <section className="login-brand">
-        <div className="brand-symbol">
-          <Waves size={40} />
-        </div>
+        <span className="brand-mark brand-mark-login">
+          <img src={OFFICIAL_LOGO} alt="Laundry POS logo" />
+        </span>
         <p className="eyebrow">LAUNDRY POS</p>
         <h1>
           A fresh start.
@@ -90,7 +92,7 @@ function Login({ onLogin }) {
           One place to keep the day moving.
         </p>
         <div className="laundry-loop">
-          <Waves size={120} />
+          <img src={OFFICIAL_LOGO} alt="" />
         </div>
       </section>
       <section className="login-panel">
@@ -226,8 +228,8 @@ function Shell() {
       <div className="app">
         <aside className={open ? "open" : ""}>
           <NavLink to="/" className="brand">
-            <span className="brand-symbol">
-              <Waves size={26} />
+            <span className="brand-mark">
+              <img src={OFFICIAL_LOGO} alt="" />
             </span>
             <span>
               {settings.name}

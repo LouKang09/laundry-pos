@@ -28,6 +28,7 @@ function Receipt({ data: o, onClose }) {
         </button>
       </div>
       <article className="receipt">
+        <img className="receipt-brand-logo" src={OFFICIAL_LOGO} alt="" />
         <h2>{o.business.name}</h2>
         <p>ORDER / CLAIM RECEIPT · COPY {o.copy}</p>
         <h3>{o.orderNumber}</h3>
