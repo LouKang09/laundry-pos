@@ -140,51 +140,118 @@ reporting.get("/reports", admin, async (req, res) => {
 });
 reporting.get("/dashboard", async (req, res) => {
   const cfg = await business(),
-    from = DateTime.now().setZone(cfg.timezone).startOf("day"),
-    to = from.plus({ days: 1 }),
-    todayRange = { gte: from.toJSDate(), lt: to.toJSDate() },
-    staffToday = req.user.role === "LAUNDRY_STAFF";
-  const statusWhere = staffToday ? { createdAt: todayRange } : {};
-  const unpaidWhere = {
-    paymentStatus: "UNPAID",
-    status: { not: "CANCELLED" },
-    ...(staffToday ? { createdAt: todayRange } : {}),
-  };
-  const [today, groups, claimedToday, unpaidOrders, inventory, trendData] =
-    await Promise.all([
-      db.order.aggregate({
-        where: {
-          createdAt: todayRange,
-          status: { not: "CANCELLED" },
-        },
-        _sum: { total: true },
-        _count: true,
-      }),
-      db.order.groupBy({ by: ["status"], where: statusWhere, _count: true }),
-      db.order.count({ where: { claimedAt: todayRange } }),
-      db.order.count({ where: unpaidWhere }),
-      req.user.role === "ADMIN"
-        ? db.inventoryItem.findMany({ where: { active: true } })
-        : Promise.resolve([]),
-      report(staffToday ? from : from.minus({ days: 6 }), to),
-    ]);
-  const statuses = Object.fromEntries(groups.map((g) => [g.status, g._count]));
+    now = DateTime.now().setZone(cfg.timezone),
+    currentDate = now.toISODate(),
+    selectedDate = z.iso.date().parse(req.query.date || currentDate),
+    from = DateTime.fromISO(selectedDate, { zone: cfg.timezone }).startOf("day"),
+    to = from.plus({ days: 1 });
+
+  if (from > now.startOf("day")) fail(400, "Dashboard date cannot be in the future");
+
+  const selectedRange = { gte: from.toJSDate(), lt: to.toJSDate() },
+    staff = req.user.role === "LAUNDRY_STAFF",
+    isToday = selectedDate === currentDate,
+    currentAdminOperations = req.user.role === "ADMIN" && isToday,
+    statusWhere = currentAdminOperations ? {} : { createdAt: selectedRange },
+    unpaidWhere = {
+      paymentStatus: "UNPAID",
+      status: { not: "CANCELLED" },
+      ...(currentAdminOperations ? {} : { createdAt: selectedRange }),
+    };
+
+  const [
+    selected,
+    groups,
+    claimedSelected,
+    currentUnpaid,
+    inventory,
+    trendData,
+    cohortOrders,
+  ] = await Promise.all([
+    db.order.aggregate({
+      where: {
+        createdAt: selectedRange,
+        status: { not: "CANCELLED" },
+      },
+      _sum: { total: true },
+      _count: true,
+    }),
+    db.order.groupBy({ by: ["status"], where: statusWhere, _count: true }),
+    db.order.count({ where: { claimedAt: selectedRange } }),
+    db.order.count({ where: unpaidWhere }),
+    req.user.role === "ADMIN"
+      ? db.inventoryItem.findMany({ where: { active: true } })
+      : Promise.resolve([]),
+    report(req.user.role === "ADMIN" ? from.minus({ days: 6 }) : from, to),
+    !isToday
+      ? db.order.findMany({
+          where: { createdAt: selectedRange },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  let statuses = Object.fromEntries(groups.map((g) => [g.status, g._count])),
+    unpaidOrders = currentUnpaid;
+
+  if (!isToday && cohortOrders.length) {
+    const ids = cohortOrders.map((order) => order.id),
+      [history, payments] = await Promise.all([
+        db.orderStatusHistory.findMany({
+          where: {
+            orderId: { in: ids },
+            createdAt: { lt: to.toJSDate() },
+          },
+          orderBy: [{ orderId: "asc" }, { createdAt: "asc" }],
+          select: { orderId: true, newStatus: true },
+        }),
+        db.payment.findMany({
+          where: {
+            orderId: { in: ids },
+            createdAt: { lt: to.toJSDate() },
+          },
+          select: { orderId: true },
+        }),
+      ]);
+
+    const lastStatus = new Map();
+    for (const event of history) lastStatus.set(event.orderId, event.newStatus);
+    statuses = {};
+    for (const order of cohortOrders) {
+      const status = lastStatus.get(order.id) || "RECEIVED";
+      statuses[status] = (statuses[status] || 0) + 1;
+    }
+
+    const paid = new Set(payments.map((payment) => payment.orderId));
+    unpaidOrders = cohortOrders.filter((order) => {
+      const status = lastStatus.get(order.id) || "RECEIVED";
+      return status !== "CANCELLED" && !paid.has(order.id);
+    }).length;
+  }
+
   res.json({
-    todaySales: today._sum.total || "0",
-    todayOrders: today._count,
+    todaySales: selected._sum.total || "0",
+    todayOrders: selected._count,
     activeOrders: ["RECEIVED", "WASHING", "DRYING", "FOLDING"].reduce(
-      (s, k) => s + (statuses[k] || 0),
+      (sum, status) => sum + (statuses[status] || 0),
       0,
     ),
     statuses,
-    claimedToday,
+    claimedToday: claimedSelected,
     unpaidOrders,
     lowInventory:
       req.user.role === "ADMIN"
-        ? inventory.filter((i) => i.stock.lte(i.lowStockThreshold)).length
+        ? inventory.filter((item) => item.stock.lte(item.lowStockThreshold)).length
         : null,
     trend: trendData.trend,
-    dashboardScope: staffToday ? "TODAY" : "BUSINESS",
+    dashboardScope: isToday
+      ? staff
+        ? "TODAY"
+        : "BUSINESS"
+      : "BACKDATE",
+    viewDate: selectedDate,
+    isToday,
     timezone: cfg.timezone,
   });
 });
+

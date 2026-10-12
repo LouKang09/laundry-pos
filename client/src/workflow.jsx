@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
+  CalendarDays,
   Camera,
   Plus,
   QrCode,
@@ -34,6 +35,13 @@ const activeStages = ["RECEIVED", "WASHING", "DRYING", "FOLDING"];
 const today = () =>
   new Date().toLocaleDateString("en-CA", {
     timeZone: window.businessZone || "Asia/Manila",
+  });
+const prettyDay = (value) =>
+  new Date(value + "T12:00:00").toLocaleDateString("en-PH", {
+    timeZone: window.businessZone || "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 
 function Stat({ title, value, accent }) {
@@ -187,31 +195,98 @@ function ReportPrintControls() {
 }
 
 export function Dashboard() {
-  const [rev, setRev] = useState(0);
-  const { data: d, error, loading } = useData("/dashboard", rev);
+  const [rev, setRev] = useState(0),
+    [viewDate, setViewDate] = useState(today());
+  const { data: d, error, loading } = useData(
+    "/dashboard?date=" + encodeURIComponent(viewDate),
+    rev,
+  );
   const { user, admin } = useApp();
+  const isTodayView = viewDate === today(),
+    viewLabel = isTodayView ? "Today" : prettyDay(viewDate);
+
   useEffect(() => {
-    const id = setInterval(() => setRev((v) => v + 1), 30000);
+    const id = setInterval(() => {
+      if (viewDate === today()) setRev((v) => v + 1);
+    }, 30000);
     return () => clearInterval(id);
-  }, []);
+  }, [viewDate]);
+
+  const stageCard = (status) => {
+    const content = (
+      <>
+        <Badge value={status} />
+        <strong>{d.statuses[status] || 0}</strong>
+        <span>orders</span>
+      </>
+    );
+    return isTodayView ? (
+      <Link
+        to={"/orders?status=" + status}
+        className={"stage-card " + status.toLowerCase()}
+        key={status}
+      >
+        {content}
+      </Link>
+    ) : (
+      <div
+        className={"stage-card " + status.toLowerCase()}
+        key={status}
+        title={"Historical end-of-day snapshot for " + viewLabel}
+      >
+        {content}
+      </div>
+    );
+  };
+
   return (
     <>
       <PageHead
         title={`Good ${new Date().getHours() < 12 ? "morning" : "day"}, ${user.name.split(" ")[0]}`}
       >
+        <div className="filters" style={{ margin: 0 }}>
+          <span className="muted" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <CalendarDays size={16} /> View date
+          </span>
+          <input
+            aria-label="Dashboard view date"
+            type="date"
+            value={viewDate}
+            max={today()}
+            onChange={(e) => setViewDate(e.target.value || today())}
+          />
+          {!isTodayView && (
+            <button className="secondary" onClick={() => setViewDate(today())}>
+              Today
+            </button>
+          )}
+        </div>
         <button className="secondary" onClick={() => setRev((v) => v + 1)}>
           <RefreshCw size={17} /> Refresh
         </button>
         <Link className="primary" to="/new">
-          <Plus size={19} /> New order
+          <Plus size={19} /> {admin ? "Manual add" : "New order"}
         </Link>
       </PageHead>
-      {!admin && (
+
+      {!isTodayView && (
+        <section className="panel" style={{ marginBottom: 16 }}>
+          <strong>Backdate view · {viewLabel}</strong>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Sales, orders, claims, and workflow stages below are reconstructed for
+            this date. Stage cards show the end-of-day snapshot and do not open
+            the current Orders queue.
+          </p>
+        </section>
+      )}
+
+      {!admin && isTodayView && (
         <p className="muted">
-          Laundry Staff dashboard shows today only. Pickup continues to show all
-          Ready and unclaimed orders.
+          Dashboard defaults to today. Use View date above to review a previous
+          day. Pickup continues to show all Ready and unclaimed orders.
         </p>
       )}
+
       <ErrorBox message={error} />
       {loading && !d ? (
         <Loading />
@@ -220,58 +295,103 @@ export function Dashboard() {
           <>
             <div className="summary-grid">
               <div className="stat hero-stat">
-                <span>Today's sales</span>
+                <span>{isTodayView ? "Today's sales" : `Sales · ${viewLabel}`}</span>
                 <h2>{cash(d.todaySales)}</h2>
-                <small>Orders received today · excludes cancellations</small>
+                <small>
+                  {isTodayView
+                    ? "Orders received today · excludes cancellations"
+                    : `Orders received ${viewLabel} · excludes cancellations`}
+                </small>
               </div>
-              <Stat title="Today's orders" value={d.todayOrders} />
-              <Stat title={admin ? "Active orders" : "Today's active orders"} value={d.activeOrders} />
               <Stat
-                title={admin ? "Ready for pickup" : "Ready today"}
+                title={isTodayView ? "Today's orders" : `Orders · ${viewLabel}`}
+                value={d.todayOrders}
+              />
+              <Stat
+                title={
+                  isTodayView
+                    ? admin
+                      ? "Active orders"
+                      : "Today's active orders"
+                    : "Active at day end"
+                }
+                value={d.activeOrders}
+              />
+              <Stat
+                title={
+                  isTodayView
+                    ? admin
+                      ? "Ready for pickup"
+                      : "Ready today"
+                    : "Ready at day end"
+                }
                 value={d.statuses.READY || 0}
                 accent
               />
             </div>
+
             <div className="section-title">
-              <h2>{admin ? "On the floor" : "Today's work"}</h2>
-              <Link to="/orders">
-                View orders <ArrowRight size={16} />
-              </Link>
-            </div>
-            <div className="stage-cards">
-              {activeStages.map((s) => (
-                <Link
-                  to={"/orders?status=" + s}
-                  className={"stage-card " + s.toLowerCase()}
-                  key={s}
-                >
-                  <Badge value={s} />
-                  <strong>{d.statuses[s] || 0}</strong>
-                  <span>orders</span>
+              <div>
+                <h2>
+                  {isTodayView
+                    ? admin
+                      ? "On the floor"
+                      : "Today's work"
+                    : `End-of-day stage · ${viewLabel}`}
+                </h2>
+                {!isTodayView && (
+                  <span className="muted">Historical workflow snapshot</span>
+                )}
+              </div>
+              {isTodayView && (
+                <Link to="/orders">
+                  View orders <ArrowRight size={16} />
                 </Link>
-              ))}
+              )}
             </div>
+
+            <div className="stage-cards">{activeStages.map(stageCard)}</div>
+
             {admin && (
               <section className="panel" style={{ marginTop: 18 }}>
                 <div className="section-title">
                   <div>
                     <h2>Sales trend</h2>
-                    <span className="muted">Connected daily graph · last 7 days</span>
+                    <span className="muted">
+                      {isTodayView
+                        ? "Connected daily graph · last 7 days"
+                        : `7-day trend ending ${viewLabel}`}
+                    </span>
                   </div>
                 </div>
                 <LineSalesChart rows={d.trend} />
                 <div className="section-title" style={{ marginTop: 14 }}>
                   <div>
                     <h3>Print business report</h3>
-                    <span className="muted">Daily, weekly, monthly, or custom range</span>
+                    <span className="muted">
+                      Daily, weekly, monthly, or custom range
+                    </span>
                   </div>
                 </div>
                 <ReportPrintControls />
               </section>
             )}
+
             <div className="quick-stats">
-              <Stat title="Claimed today" value={d.claimedToday} />
-              <Stat title={admin ? "Unpaid orders" : "Today's unpaid orders"} value={d.unpaidOrders} />
+              <Stat
+                title={isTodayView ? "Claimed today" : `Claimed · ${viewLabel}`}
+                value={d.claimedToday}
+              />
+              <Stat
+                title={
+                  isTodayView
+                    ? admin
+                      ? "Unpaid orders"
+                      : "Today's unpaid orders"
+                    : "Unpaid at day end"
+                }
+                value={d.unpaidOrders}
+              />
               {admin && <Stat title="Low inventory" value={d.lowInventory} />}
             </div>
           </>
