@@ -1691,142 +1691,37 @@ td .actions {
 }
 
 
-/* White UI refresh */
-:root,
-html,
-body,
-#root,
-.app,
-.workspace,
-main {
-  background: #ffffff;
-}
-
-.app > aside {
-  background: #ffffff;
-  color: #173346;
-  border-right: 1px solid #e7edf1;
-  box-shadow: 4px 0 20px rgba(16, 46, 64, 0.035);
-}
-
-.brand {
-  color: #173346;
-}
-
-.brand small {
-  color: #78909e;
-}
-
+/* Official logo: white tile only. Preserve the original Laundry POS theme. */
 .brand-mark {
   width: 48px;
   height: 48px;
-  border-radius: 0;
-  overflow: visible;
-  background: transparent;
+  border-radius: 10px;
+  padding: 5px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #dbe5ea;
   box-shadow: none;
 }
-
-.brand-mark img,
-.laundry-loop img {
+.brand-mark img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  display: block;
 }
-
 .brand-mark-login {
-  width: 104px;
-  height: 104px;
-  margin-bottom: 24px;
+  width: 72px;
+  height: 72px;
+  padding: 7px;
 }
-
 .brand-mark-tracking {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 18px;
+  width: 66px;
+  height: 66px;
+  margin: 0 auto 20px;
+  padding: 6px;
 }
-
-.navlabel {
-  color: #8a9aa4;
-}
-
-nav a {
-  color: #486171;
-}
-
-nav a:hover {
-  background: #f4f8f9;
-  color: #173346;
-  filter: none;
-}
-
-nav a.active {
-  background: #eef7f7;
-  color: #0b6670;
-}
-
-nav a[href="/new"] {
-  background: #edf8f5;
-  color: #126b63;
-}
-
-nav a[href="/new"].active {
-  background: #dff3ec;
-  color: #0b5d57;
-}
-
-.account {
-  border-top-color: #e7edf1;
-}
-
-.account small {
-  color: #78909e;
-}
-
-.topbar {
-  background: #ffffff;
-  color: #708491;
-}
-
-.panel,
-.stat,
-.stage-card,
-.service-card,
-.modal,
-.login-panel,
-.tracking-card,
-.receipt {
-  background: #ffffff;
-}
-
-.login {
-  background: #ffffff;
-}
-
-.login-brand {
-  background: #ffffff;
-  color: #173346;
-  border-right: 1px solid #e7edf1;
-}
-
-.login-brand .eyebrow {
-  color: #0b7f88;
-}
-
-.login-brand > p:last-of-type {
-  color: #6f8592;
-}
-
 .laundry-loop {
   display: none;
 }
-
-.tracking {
+.receipt .receipt-brand-logo {
   background: #ffffff;
-}
-
-.receipt-overlay {
-  background: #ffffff;
-}
-
-.brand-symbol {
-  background: #edf8f5;
-  color: #0b7f88;
 }
