@@ -6,6 +6,7 @@ import { admin } from "./auth.js";
 import { business, orderInclude } from "./orders.js";
 import { priceItem, workflow } from "./pricing.js";
 import { z, decimal, paymentSchema, text } from "./validation.js";
+import { decodePaymentReceipt } from "./payment-receipt.js";
 
 export const historicalOrders = Router();
 
@@ -128,6 +129,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
                       : null,
                   amount: total,
                   createdAt: historicalAt.toJSDate(),
+                  ...decodePaymentReceipt(data.payment.receiptDataUrl),
                 },
               },
             }

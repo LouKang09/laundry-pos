@@ -49,7 +49,7 @@ app.use((req, res, next) => {
     return res.status(403).json({ error: "Origin not allowed" });
   next();
 });
-app.use(express.json({ limit: "100kb" }), cookieParser());
+app.use(express.json({ limit: "5mb" }), cookieParser());
 app.get("/health", async (req, res) => {
   try {
     const [migrations] = await db.$queryRaw`

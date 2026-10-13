@@ -11,11 +11,21 @@ import {
 } from "./validation.js";
 import { priceItem, workflow } from "./pricing.js";
 import { admin } from "./auth.js";
+import { decodePaymentReceipt } from "./payment-receipt.js";
 import { DateTime } from "luxon";
 export const orders = Router();
 export const orderInclude = {
   items: true,
-  payment: true,
+  payment: {
+    select: {
+      id: true,
+      method: true,
+      amount: true,
+      reference: true,
+      receiptMime: true,
+      createdAt: true,
+    },
+  },
   user: { select: { id: true, name: true } },
 };
 export const business = async (tx = db) =>
@@ -35,6 +45,7 @@ async function receive(tx, order, userId, payment) {
   if (order.status === "CANCELLED")
     fail(409, "Cancelled orders cannot receive payment");
   if (order.paymentStatus === "PAID") fail(409, "This order is already paid");
+  const receipt = decodePaymentReceipt(payment.receiptDataUrl);
   await tx.payment.create({
     data: {
       orderId: order.id,
@@ -42,6 +53,7 @@ async function receive(tx, order, userId, payment) {
       method: payment.method,
       reference: payment.method === "GCASH" ? payment.reference : null,
       amount: order.total,
+      ...receipt,
     },
   });
   await tx.order.update({
@@ -275,6 +287,18 @@ orders.get("/scan/:token", async (req, res) => {
         : null,
   });
 });
+orders.get("/:id/payment-receipt", async (req, res) => {
+  const payment = await db.payment.findUnique({
+    where: { orderId: req.params.id },
+    select: { receiptMime: true, receiptImage: true },
+  });
+  if (!payment?.receiptImage || !payment.receiptMime)
+    fail(404, "No payment receipt was saved for this order");
+  res.set("Cache-Control", "private, no-store");
+  res.type(payment.receiptMime);
+  res.send(Buffer.from(payment.receiptImage));
+});
+
 orders.get("/:id", async (req, res) => {
   const o = await getOrder(db, req.params.id);
   const [statusHistory, notifications] = await Promise.all([

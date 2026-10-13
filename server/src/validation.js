@@ -75,6 +75,7 @@ export const paymentSchema = z
   .object({
     method: z.enum(["CASH", "GCASH"]),
     reference: z.string().trim().min(4).max(100).optional(),
+    receiptDataUrl: z.string().max(3500000).optional(),
   })
   .strict()
   .refine((v) => v.method !== "GCASH" || !!v.reference, {

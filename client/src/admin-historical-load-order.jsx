@@ -16,6 +16,7 @@ import {
   useData,
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
+import { PaymentMethodPicker, paymentPayload } from "./payment-flow";
 
 const previousBusinessDay = () =>
   new Date(Date.now() - 86400000).toLocaleDateString("en-CA", {
@@ -36,6 +37,7 @@ export function AdminHistoricalOrder() {
     [status, setStatus] = useState("CLAIMED"),
     [payment, setPayment] = useState("CASH"),
     [reference, setReference] = useState(""),
+    [receiptDataUrl, setReceiptDataUrl] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(null),
@@ -230,14 +232,23 @@ export function AdminHistoricalOrder() {
           </div>
 
           <div className="total"><span>Total</span><strong>{cash(total)}</strong></div>
-          <Field label="Payment">
-            <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-              <option value="UNPAID">Unpaid</option>
-              <option value="CASH">Paid · Cash</option>
-              <option value="GCASH">Paid · GCash</option>
-            </select>
-          </Field>
-          {payment === "GCASH" && <Field label="GCash reference"><input value={reference} onChange={(e) => setReference(e.target.value)} required /></Field>}
+          <div className="water-payment-inline">
+            <div className="section-title">
+              <div>
+                <h3>Payment</h3>
+                <span className="muted">Water POS-style payment selection</span>
+              </div>
+            </div>
+            <PaymentMethodPicker
+              method={payment}
+              setMethod={setPayment}
+              reference={reference}
+              setReference={setReference}
+              receiptDataUrl={receiptDataUrl}
+              setReceiptDataUrl={setReceiptDataUrl}
+              allowUnpaid={status !== "CLAIMED"}
+            />
+          </div>
           {claimedWithoutPayment && <ErrorBox message="Claimed historical transactions must be marked paid." />}
 
           <button
@@ -253,7 +264,7 @@ export function AdminHistoricalOrder() {
                   customerId: customer.id,
                   status,
                   items: lines,
-                  ...(payment !== "UNPAID" ? { payment: { method: payment, ...(payment === "GCASH" ? { reference } : {}) } } : {}),
+                  ...(paymentPayload(payment, reference, receiptDataUrl) ? { payment: paymentPayload(payment, reference, receiptDataUrl) } : {}),
                 });
                 setSaved(order);
                 setLines([]);
@@ -261,6 +272,7 @@ export function AdminHistoricalOrder() {
                 setStatus("CLAIMED");
                 setPayment("CASH");
                 setReference("");
+                setReceiptDataUrl("");
                 setRequestKey(crypto.randomUUID());
                 notify(`Historical transaction ${order.orderNumber} added`);
               } catch (err) {

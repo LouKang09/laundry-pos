@@ -16,6 +16,7 @@ import {
   useData,
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
+import { PaymentDialog, paymentPayload } from "./payment-flow";
 
 export function PosOrder() {
   const { notify } = useApp();
@@ -27,6 +28,8 @@ export function PosOrder() {
     [express, setExpress] = useState(false),
     [payment, setPayment] = useState("UNPAID"),
     [reference, setReference] = useState(""),
+    [receiptDataUrl, setReceiptDataUrl] = useState(""),
+    [paymentOpen, setPaymentOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(null),
@@ -217,52 +220,78 @@ export function PosOrder() {
           </details>
 
           <div className="total"><span>Total due</span><strong>{cash(total)}</strong></div>
-          <Field label="Payment">
-            <select value={payment} onChange={(e) => setPayment(e.target.value)}>
-              <option value="UNPAID">Unpaid · Pay at pickup</option>
-              <option value="CASH">Paid · Cash</option>
-              <option value="GCASH">Paid · GCash</option>
-            </select>
-          </Field>
-          {payment === "GCASH" && (
-            <Field label="GCash reference"><input value={reference} onChange={(e) => setReference(e.target.value)} required /></Field>
-          )}
+          <div className="water-payment-summary">
+            <span>Payment</span>
+            <strong>
+              {payment === "UNPAID"
+                ? "Pay at Pickup"
+                : payment === "GCASH"
+                  ? "GCash"
+                  : "Cash"}
+            </strong>
+          </div>
           <button
             className="primary full"
-            disabled={busy || !customer || !lines.length || priced.some((line) => line.pricing.total.lte(0)) || (payment === "GCASH" && reference.trim().length < 4)}
-            onClick={async () => {
-              setBusy(true);
-              setError("");
-              try {
-                const order = await post("/orders", {
-                  requestKey,
-                  customerId: customer.id,
-                  items: lines,
-                  ...(payment !== "UNPAID" ? { payment: { method: payment, ...(payment === "GCASH" ? { reference } : {}) } } : {}),
-                  ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
-                  ...(to ? { estimatedTo: new Date(to).toISOString() } : {}),
-                });
-                setSaved(order);
-                setLines([]);
-                setCustomer(null);
-                setPayment("UNPAID");
-                setReference("");
-                setFrom("");
-                setTo("");
-                setRequestKey(crypto.randomUUID());
-                notify(`Order ${order.orderNumber} received`);
-              } catch (err) {
-                setError(err.message);
-              } finally {
-                setBusy(false);
-              }
-            }}
+            disabled={
+              busy ||
+              !customer ||
+              !lines.length ||
+              priced.some((line) => line.pricing.total.lte(0))
+            }
+            onClick={() => setPaymentOpen(true)}
           >
-            {busy ? "Saving order…" : "Save order"}<ArrowRight size={18} />
+            Payment <ArrowRight size={18} />
           </button>
           <p className="small muted center">New orders begin at Received. Server pricing verifies the same load calculation before saving.</p>
         </section>
       </div>
+
+      <PaymentDialog
+        open={paymentOpen}
+        onClose={() => !busy && setPaymentOpen(false)}
+        total={total}
+        method={payment}
+        setMethod={setPayment}
+        reference={reference}
+        setReference={setReference}
+        receiptDataUrl={receiptDataUrl}
+        setReceiptDataUrl={setReceiptDataUrl}
+        busy={busy}
+        onConfirm={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            const selectedPayment = paymentPayload(
+              payment,
+              reference,
+              receiptDataUrl,
+            );
+            const order = await post("/orders", {
+              requestKey,
+              customerId: customer.id,
+              items: lines,
+              ...(selectedPayment ? { payment: selectedPayment } : {}),
+              ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
+              ...(to ? { estimatedTo: new Date(to).toISOString() } : {}),
+            });
+            setSaved(order);
+            setPaymentOpen(false);
+            setLines([]);
+            setCustomer(null);
+            setPayment("UNPAID");
+            setReference("");
+            setReceiptDataUrl("");
+            setFrom("");
+            setTo("");
+            setRequestKey(crypto.randomUUID());
+            notify(`Order ${order.orderNumber} received`);
+          } catch (err) {
+            setError(err.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
 
       {newCustomer && (
         <CustomerForm

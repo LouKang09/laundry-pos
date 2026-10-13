@@ -19,6 +19,7 @@ import Decimal from "decimal.js";
 import { api, post } from "./api";
 import { useApp } from "./context";
 import { OFFICIAL_LOGO } from "./brand";
+import { PaymentDialog, paymentPayload } from "./payment-flow";
 import {
   useData,
   PageHead,
@@ -728,6 +729,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [err, setErr] = useState(""),
     [method, setMethod] = useState("CASH"),
     [reference, setReference] = useState(""),
+    [paymentReceiptDataUrl, setPaymentReceiptDataUrl] = useState(""),
+    [paymentOpen, setPaymentOpen] = useState(false),
     [receipt, setReceipt] = useState(null),
     [reason, setReason] = useState(""),
     [cancel, setCancel] = useState(false);
@@ -811,6 +814,21 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     ? `${o.payment.method} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`
                     : "Unpaid"}
                 </strong>
+                {o.payment?.receiptMime && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() =>
+                      window.open(
+                        "/api/orders/" + id + "/payment-receipt",
+                        "_blank",
+                        "noopener,noreferrer",
+                      )
+                    }
+                  >
+                    View payment receipt
+                  </button>
+                )}
               </p>
               <p>
                 Total <strong>{cash(o.total)}</strong>
@@ -822,42 +840,15 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                   <div>
                     <h3>Receive full payment</h3>
                     <p className="muted">
-                      Verify the payment before recording it. Amount:{" "}
-                      {cash(o.total)}
+                      Use the same payment flow as Water POS. Amount: {cash(o.total)}
                     </p>
-                    <div className="filters">
-                      <select
-                        aria-label="Payment method"
-                        value={method}
-                        onChange={(e) => setMethod(e.target.value)}
-                      >
-                        <option>CASH</option>
-                        <option>GCASH</option>
-                      </select>
-                      {method === "GCASH" && (
-                        <input
-                          aria-label="GCash reference"
-                          placeholder="GCash reference"
-                          value={reference}
-                          onChange={(e) => setReference(e.target.value)}
-                        />
-                      )}
-                      <button
-                        className="primary"
-                        disabled={busy}
-                        onClick={() =>
-                          action(async () => {
-                            await post("/orders/" + id + "/payment", {
-                              method,
-                              ...(method === "GCASH" ? { reference } : {}),
-                            });
-                            notify("Payment received");
-                          })
-                        }
-                      >
-                        Receive {cash(o.total)}
-                      </button>
-                    </div>
+                    <button
+                      className="primary"
+                      disabled={busy}
+                      onClick={() => setPaymentOpen(true)}
+                    >
+                      Payment · {cash(o.total)}
+                    </button>
                   </div>
                 )}
                 {next && (
@@ -990,6 +981,33 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
           </>
         )
       )}
+      <PaymentDialog
+        open={paymentOpen}
+        onClose={() => !busy && setPaymentOpen(false)}
+        total={o?.total || 0}
+        method={method}
+        setMethod={setMethod}
+        reference={reference}
+        setReference={setReference}
+        receiptDataUrl={paymentReceiptDataUrl}
+        setReceiptDataUrl={setPaymentReceiptDataUrl}
+        allowUnpaid={false}
+        busy={busy}
+        title="Settle unpaid order"
+        onConfirm={() =>
+          action(async () => {
+            await post(
+              "/orders/" + id + "/payment",
+              paymentPayload(method, reference, paymentReceiptDataUrl),
+            );
+            setPaymentOpen(false);
+            setReference("");
+            setPaymentReceiptDataUrl("");
+            setMethod("CASH");
+            notify("Payment received");
+          })
+        }
+      />
       {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
     </Modal>
   );

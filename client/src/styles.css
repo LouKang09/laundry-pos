@@ -1725,3 +1725,55 @@ td .actions {
 .receipt .receipt-brand-logo {
   background: #ffffff;
 }
+
+
+/* Water POS-style payment experience */
+.water-payment-overlay{position:fixed;inset:0;z-index:180;display:flex;align-items:flex-end;justify-content:center;background:rgba(8,27,38,.58);backdrop-filter:blur(4px);padding:18px 18px 0}
+.water-payment-sheet{width:min(100%,590px);max-height:92dvh;overflow-y:auto;background:#fff;border-radius:28px 28px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -14px 55px rgba(8,35,48,.2)}
+.water-payment-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.water-payment-header h2{margin:0;font-size:1.25rem}
+.water-payment-close{width:40px;height:40px;border:1px solid var(--border);border-radius:12px;background:#f6f9fa;color:var(--ink);font-size:1.55rem;line-height:1}
+.water-payment-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.water-payment-methods.two{grid-template-columns:repeat(2,1fr)}
+.water-payment-method{display:flex;align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid var(--border);border-radius:16px;background:#fff;color:var(--ink);text-align:left}
+.water-payment-method.active{border:2px solid var(--teal);background:#eef8f7;padding:11px}
+.water-payment-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:12px;background:var(--teal);color:#fff;font-weight:850}
+.water-payment-method strong,.water-payment-method small{display:block}
+.water-payment-method strong{font-size:.82rem}
+.water-payment-method small{margin-top:2px;color:var(--muted);font-size:.65rem;line-height:1.25}
+.water-payment-panel{margin-top:14px}
+.water-payment-info,.water-payment-error{margin:0;padding:13px;border-radius:14px;background:#eef8f7;color:#365b58;font-size:.8rem;line-height:1.5}
+.water-payment-info-unpaid{background:#fff7e7;color:#765a1d}
+.water-payment-error{margin-top:10px;background:#fff0ed;color:#a64237;border:1px solid #f1c9c1}
+.water-receipt-upload{border:1.5px dashed #99bfbb;border-radius:16px;background:#f7fbfa;padding:12px}
+.water-receipt-upload.has-file{border-style:solid;background:#eef8f7}
+.water-receipt-upload-head{display:flex;flex-direction:column;gap:3px;margin-bottom:10px}
+.water-receipt-upload-head strong{font-size:.82rem}
+.water-receipt-upload-head small{color:var(--muted);font-size:.68rem;line-height:1.35}
+.water-receipt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.water-receipt-action{display:flex;align-items:center;gap:9px;min-width:0;padding:10px;border:1px solid var(--border);border-radius:13px;background:#fff;cursor:pointer}
+.water-receipt-action.primary-receipt-action{border-color:#91c4c0;background:#eef8f7}
+.water-receipt-action input{display:none}
+.water-receipt-action strong,.water-receipt-action small{display:block}
+.water-receipt-action strong{font-size:.76rem}
+.water-receipt-action small{margin-top:2px;color:var(--muted);font-size:.62rem}
+.water-upload-icon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:50%;background:var(--teal);color:#fff}
+.water-receipt-preview-wrap{margin-top:10px}
+.water-receipt-preview{display:block;width:100%;max-height:190px;object-fit:contain;border:1px solid var(--border);border-radius:14px;background:#f5f5f5}
+.water-payment-field{display:grid;gap:6px;margin-top:12px}
+.water-payment-field>span{font-size:.78rem;font-weight:700}
+.water-payment-field input{width:100%;border:1px solid #cdd9e2;border-radius:13px;background:#fff;padding:12px}
+.water-payment-field small{color:var(--muted);font-size:.68rem}
+.water-payment-actions{margin-top:14px}
+.water-dialog-total{display:flex;align-items:center;justify-content:space-between;margin:14px 0 10px;padding-top:13px;border-top:1px solid var(--border)}
+.water-dialog-total strong{font-size:1.5rem}
+.water-payment-summary{display:flex;justify-content:space-between;align-items:center;padding:12px 0 15px;color:var(--muted);font-size:.82rem}
+.water-payment-summary strong{color:var(--ink)}
+.water-payment-inline{margin:14px 0 18px;padding:14px;border:1px solid var(--border);border-radius:16px;background:#fbfcfd}
+.water-payment-inline .section-title{margin-bottom:12px}
+@media(max-width:720px){
+  .water-payment-overlay{padding:0}
+  .water-payment-sheet{width:100%;max-width:none;max-height:100dvh;min-height:58dvh;border-radius:24px 24px 0 0;padding:18px 14px calc(18px + env(safe-area-inset-bottom))}
+  .water-payment-methods,.water-payment-methods.two{grid-template-columns:1fr}
+  .water-receipt-actions{grid-template-columns:1fr 1fr}
+}
