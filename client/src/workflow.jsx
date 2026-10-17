@@ -735,7 +735,7 @@ export function StaffQrWorkflow() {
       </PageHead>
       <section className="panel">
         <p className="muted">
-          Staff-only workflow. Each phase change is saved with the signed-in staff account and timestamp. Scan the staff QR again when the next phase is ready.
+          For signed-in Laundry POS users. Each phase change is saved with the account and timestamp. Scan the staff QR again when the next phase is ready.
         </p>
         <ErrorBox message={error} />
         {loading ? (
