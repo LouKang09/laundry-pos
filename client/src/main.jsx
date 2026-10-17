@@ -345,6 +345,26 @@ class AppErrorBoundary extends React.Component {
   }
   componentDidCatch(error, info) {
     console.error("Laundry POS page failed to render", error, info);
+    const path = window.location.pathname;
+    const route = path.startsWith("/scan/")
+      ? "staff-scan"
+      : path.startsWith("/track/")
+        ? "customer-track"
+        : "other";
+    try {
+      fetch("/api/client-errors", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          route,
+          message: String(error?.message || "Unknown React render error").slice(0, 300),
+          componentStack: String(info?.componentStack || "").slice(0, 2000),
+        }),
+      }).catch(() => {});
+    } catch {
+      // Error reporting must never prevent the fallback screen from rendering.
+    }
   }
   render() {
     if (this.state.hasError) {
