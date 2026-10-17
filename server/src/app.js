@@ -81,6 +81,34 @@ app.use("/api", (req, res, next) => {
   res.set("Cache-Control", "no-store");
   next();
 });
+
+// Minimal, rate-limited reporting for React render failures. Never accept or log
+// the full URL because staff QR URLs contain private order tokens.
+app.post(
+  "/api/client-errors",
+  rateLimit({
+    windowMs: 60000,
+    limit: 5,
+    skip: () => process.env.NODE_ENV === "test",
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+  }),
+  (req, res) => {
+    const message =
+      typeof req.body?.message === "string"
+        ? req.body.message.slice(0, 300)
+        : "Unknown client render error";
+    const componentStack =
+      typeof req.body?.componentStack === "string"
+        ? req.body.componentStack.slice(0, 2000)
+        : "";
+    const route = ["staff-scan", "customer-track"].includes(req.body?.route)
+      ? req.body.route
+      : "other";
+    console.error("Client render error", { route, message, componentStack });
+    res.status(204).end();
+  },
+);
 authRoutes(app);
 app.get(
   "/api/track/:token",
