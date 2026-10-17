@@ -654,7 +654,8 @@ export function OrderList({ mode = "orders", customerId }) {
                   </td>
                   <td>
                     <strong>{o.customerName}</strong>
-                    <small>{o.customerPhone}</small>
+                    <small>{o.customerPhone}{o.customerRoomUnit ? " · " + o.customerRoomUnit : ""}</small>
+                    {o.washingMachine && <small>Machine: {o.washingMachine}</small>}
                   </td>
                   <td>
                     {o.items.map((i) => (

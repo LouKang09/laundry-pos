@@ -308,7 +308,7 @@ orders.get("/:id", async (req, res) => {
   const [statusHistory, notifications] = await Promise.all([
     db.orderStatusHistory.findMany({
       where: { orderId: o.id },
-      include: { user: { select: { name: true } } },
+      include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: "asc" },
     }),
     db.notification.findMany({
