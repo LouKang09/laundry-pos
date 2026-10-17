@@ -335,11 +335,50 @@ function Shell() {
     </Context.Provider>
   );
 }
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error("Laundry POS page failed to render", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="tracking">
+          <section className="tracking-card">
+            <span className="brand-mark brand-mark-tracking">
+              <img src={OFFICIAL_LOGO} alt="Laundry POS logo" />
+            </span>
+            <p className="eyebrow">LAUNDRY POS</p>
+            <h1>We couldn’t open this page.</h1>
+            <p className="muted">
+              Refresh the page to try again. If this continues, return to Laundry POS
+              and reopen the QR code.
+            </p>
+            <button className="primary" onClick={() => window.location.reload()}>
+              Refresh page
+            </button>
+            <p><a href="/">Return to Laundry POS</a></p>
+          </section>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 createRoot(document.getElementById("root")).render(
-  <BrowserRouter>
-    <Routes>
-      <Route path="/track/:token" element={<Tracking />} />
-      <Route path="*" element={<Shell />} />
-    </Routes>
-  </BrowserRouter>,
+  <AppErrorBoundary>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/track/:token" element={<Tracking />} />
+        <Route path="*" element={<Shell />} />
+      </Routes>
+    </BrowserRouter>
+  </AppErrorBoundary>,
 );

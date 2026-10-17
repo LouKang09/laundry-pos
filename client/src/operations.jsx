@@ -20,6 +20,7 @@ import { api, post, put } from "./api";
 import { useApp } from "./context";
 import { PaymentDialog, paymentPayload } from "./payment-flow";
 import { PosReceiptPrint } from "./pos-receipt-print";
+import { OFFICIAL_LOGO } from "./brand";
 import {
   useData,
   PageHead,
