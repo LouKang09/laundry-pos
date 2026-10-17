@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Printer, RefreshCw } from "lucide-react";
 import { post } from "./api";
+import { OFFICIAL_LOGO } from "./brand";
 import { useApp } from "./context";
 import {
   Badge,
@@ -36,6 +37,7 @@ function Receipt({ data: o, onClose }) {
           {o.customerName}
           <br />
           {o.customerPhone}
+          {o.customerRoomUnit && <><br />Room / Unit: {o.customerRoomUnit}</>}
         </p>
         <p>{date(o.createdAt)}</p>
         <hr />
@@ -69,6 +71,8 @@ function Receipt({ data: o, onClose }) {
           {o.payment ? " · " + o.payment.method : ""}
         </p>
         <p>
+          Washing machine: {o.washingMachine || "Not assigned yet"}
+          <br />
           Approximate pickup
           <br />
           {date(o.estimatedFrom)} – {date(o.estimatedTo)}

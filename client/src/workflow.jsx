@@ -677,6 +677,7 @@ export function OrderList({ mode = "orders" }) {
     [selected, setSelected] = useState(null),
     [scanner, setScanner] = useState(false),
     [scanResult, setScanResult] = useState(null),
+    [scanMachine, setScanMachine] = useState(""),
     [scanError, setScanError] = useState(""),
     [scanBusy, setScanBusy] = useState(false);
   const { admin, notify } = useApp();
@@ -700,7 +701,9 @@ export function OrderList({ mode = "orders" }) {
     setScanner(false);
     setScanError("");
     try {
-      setScanResult(await api("/orders/scan/" + token));
+      const result = await api("/orders/scan/" + token);
+      setScanMachine(result.washingMachine || "");
+      setScanResult(result);
     } catch (e) {
       setScanError(e.message);
     }
@@ -796,7 +799,8 @@ export function OrderList({ mode = "orders" }) {
                   </td>
                   <td>
                     <strong>{o.customerName}</strong>
-                    <small>{o.customerPhone}</small>
+                    <small>{o.customerPhone}{o.customerRoomUnit ? " · " + o.customerRoomUnit : ""}</small>
+                    {o.washingMachine && <small>Machine: {o.washingMachine}</small>}
                   </td>
                   <td>
                     {o.items.map((i) => (
@@ -866,6 +870,17 @@ export function OrderList({ mode = "orders" }) {
               {scanResult.blockedReason && (
                 <ErrorBox message={scanResult.blockedReason} />
               )}
+              {scanResult.nextStatus === "WASHING" && (
+                <Field label="Washing machine / machine number">
+                  <input
+                    value={scanMachine}
+                    onChange={(event) => setScanMachine(event.target.value)}
+                    placeholder="e.g. Washer 1 · 12 kg"
+                    maxLength={80}
+                    required
+                  />
+                </Field>
+              )}
               <div className="actions">
                 <button className="secondary" onClick={() => setScanResult(null)}>
                   No
@@ -883,12 +898,15 @@ export function OrderList({ mode = "orders" }) {
                 ) : (
                   <button
                     className="primary"
-                    disabled={scanBusy}
+                    disabled={scanBusy || (scanResult.nextStatus === "WASHING" && !scanMachine.trim())}
                     onClick={async () => {
                       setScanBusy(true);
                       try {
                         await post("/orders/" + scanResult.id + "/status", {
                           status: scanResult.nextStatus,
+                          ...(scanResult.nextStatus === "WASHING"
+                            ? { washingMachine: scanMachine.trim() }
+                            : {}),
                         });
                         notify(
                           `${scanResult.orderNumber} moved to ${label(scanResult.nextStatus)}`,

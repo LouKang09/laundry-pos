@@ -15,6 +15,7 @@ const historicalOrderSchema = z
     requestKey: z.string().uuid(),
     historicalDate: z.iso.date(),
     customerId: text,
+    washingMachine: z.string().trim().max(80).optional().transform((v) => v || null),
     status: z.enum(workflow),
     items: z
       .array(
@@ -88,6 +89,9 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       oldStatus: index ? workflow[index - 1] : null,
       newStatus,
       userId: req.user.id,
+      ...(newStatus === "WASHING" && data.washingMachine
+        ? { washingMachine: data.washingMachine }
+        : {}),
       createdAt: historicalAt.plus({ minutes: index }).toJSDate(),
     }));
 
@@ -104,6 +108,8 @@ historicalOrders.post("/historical", admin, async (req, res) => {
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
+        customerRoomUnit: customer.roomUnit,
+        washingMachine: data.washingMachine,
         userId: req.user.id,
         status: data.status,
         paymentStatus: data.payment ? "PAID" : "UNPAID",

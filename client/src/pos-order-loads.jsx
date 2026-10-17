@@ -17,6 +17,7 @@ import {
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { PaymentDialog, paymentPayload } from "./payment-flow";
+import { PosReceiptPrint } from "./pos-receipt-print";
 
 export function PosOrder() {
   const { notify } = useApp();
@@ -32,8 +33,11 @@ export function PosOrder() {
     [paymentOpen, setPaymentOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [saved, setSaved] = useState(null),
+    [printJob, setPrintJob] = useState(null),
+    [printFailure, setPrintFailure] = useState(null),
+    [printBusy, setPrintBusy] = useState(false),
     [requestKey, setRequestKey] = useState(crypto.randomUUID()),
+    [washingMachine, setWashingMachine] = useState(""),
     [from, setFrom] = useState(""),
     [to, setTo] = useState("");
   const { data: customers, error: customerError } = useData(
@@ -52,6 +56,19 @@ export function PosOrder() {
     (sum, line) => sum.add(line.pricing.total),
     new Decimal(0),
   );
+
+  async function preparePrint(order) {
+    setPrintBusy(true);
+    try {
+      const receipt = await post("/orders/" + order.id + "/staff-receipt");
+      setPrintFailure(null);
+      setPrintJob(receipt);
+    } catch (err) {
+      setPrintFailure({ order, message: err.message });
+    } finally {
+      setPrintBusy(false);
+    }
+  }
 
   function addService(service) {
     setLines((current) => {
@@ -119,7 +136,7 @@ export function PosOrder() {
                 <span className="avatar">{customer.name[0]}</span>
                 <div>
                   <strong>{customer.name}</strong>
-                  <small>{customer.phone}</small>
+                  <small>{customer.phone}{customer.roomUnit ? " · " + customer.roomUnit : ""}</small>
                 </div>
                 <button className="secondary" onClick={() => setCustomer(null)}>Change</button>
               </div>
@@ -212,6 +229,25 @@ export function PosOrder() {
             )}
           </div>
 
+          <Field label="Washing machine / machine number (optional)">
+            <input
+              value={washingMachine}
+              onChange={(event) => setWashingMachine(event.target.value)}
+              placeholder="e.g. Washer 1 · 12 kg"
+              maxLength={80}
+              list="laundry-washing-machines"
+            />
+            <datalist id="laundry-washing-machines">
+              <option value="Washer 1" />
+              <option value="Washer 2" />
+              <option value="Washer 3" />
+              <option value="Washer 4" />
+              <option value="Washer 5" />
+              <option value="Washer 6" />
+            </datalist>
+          </Field>
+          <p className="small muted">If no machine is assigned yet, staff will be asked to record it when moving the order to Washing.</p>
+
           <details>
             <summary>Approximate pickup window (optional)</summary>
             <Field label="From"><input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
@@ -270,21 +306,23 @@ export function PosOrder() {
               requestKey,
               customerId: customer.id,
               items: lines,
+              washingMachine: washingMachine.trim() || undefined,
               ...(selectedPayment ? { payment: selectedPayment } : {}),
               ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
               ...(to ? { estimatedTo: new Date(to).toISOString() } : {}),
             });
-            setSaved(order);
             setPaymentOpen(false);
             setLines([]);
             setCustomer(null);
             setPayment("UNPAID");
             setReference("");
             setReceiptDataUrl("");
+            setWashingMachine("");
             setFrom("");
             setTo("");
             setRequestKey(crypto.randomUUID());
-            notify(`Order ${order.orderNumber} received`);
+            notify(`Order ${order.orderNumber} received. Preparing two receipt copies.`);
+            await preparePrint(order);
           } catch (err) {
             setError(err.message);
           } finally {
@@ -302,13 +340,32 @@ export function PosOrder() {
           }}
         />
       )}
-      {saved && (
-        <Modal title="Order saved" onClose={() => setSaved(null)}>
-          <h2>{saved.orderNumber}</h2>
-          <p>{saved.customerName}</p>
-          <div className="total"><span>Total due</span><strong>{cash(saved.total)}</strong></div>
-          <p className="muted">The order is now Received. Use Receipt Center to print the QR receipt.</p>
-          <button className="primary" onClick={() => setSaved(null)}>Close</button>
+      {printJob && (
+        <PosReceiptPrint
+          data={printJob}
+          onClose={() => {
+            const orderNumber = printJob.orderNumber;
+            setPrintJob(null);
+            notify(`Two-copy receipt print confirmed for ${orderNumber}`);
+          }}
+        />
+      )}
+      {printFailure && (
+        <Modal title="Order saved — receipt printing needs attention" onClose={() => setPrintFailure(null)}>
+          <ErrorBox message={printFailure.message} />
+          <p>
+            Order <strong>{printFailure.order.orderNumber}</strong> was saved successfully.
+            Retrying here will only prepare the receipt; it will not create another order.
+          </p>
+          <p className="muted">
+            Check that the printer is connected, powered on, online, has paper, and is selected in the print dialog.
+          </p>
+          <div className="actions">
+            <button className="secondary" onClick={() => setPrintFailure(null)}>Close for now</button>
+            <button className="primary" disabled={printBusy} onClick={() => preparePrint(printFailure.order)}>
+              {printBusy ? "Preparing…" : "Try again"}
+            </button>
+          </div>
         </Modal>
       )}
     </>

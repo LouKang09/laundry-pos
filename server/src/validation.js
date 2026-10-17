@@ -28,7 +28,13 @@ export const phone = z
   .transform((v) => v.replace(/[ ()-]/g, ""))
   .refine((v) => /^\+?\d{7,15}$/.test(v), "Enter 7–15 phone digits");
 
-export const customerSchema = z.object({ name: text, phone }).strict();
+export const customerSchema = z
+  .object({
+    name: text,
+    phone,
+    roomUnit: z.string().trim().max(80).optional().transform((v) => v || null),
+  })
+  .strict();
 
 export const serviceSchema = z
   .object({
@@ -86,6 +92,12 @@ export const orderSchema = z
   .object({
     requestKey: z.string().uuid(),
     customerId: text,
+    washingMachine: z
+      .string()
+      .trim()
+      .max(80)
+      .optional()
+      .transform((v) => v || null),
     items: z
       .array(
         z

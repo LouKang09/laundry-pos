@@ -157,6 +157,8 @@ orders.post("/", async (req, res) => {
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
+        customerRoomUnit: customer.roomUnit,
+        washingMachine: data.washingMachine,
         userId: req.user.id,
         total,
         estimatedFrom: from,
@@ -271,6 +273,8 @@ orders.get("/scan/:token", async (req, res) => {
       id: true,
       orderNumber: true,
       customerName: true,
+      customerRoomUnit: true,
+      washingMachine: true,
       status: true,
       paymentStatus: true,
     },
@@ -326,16 +330,18 @@ orders.post("/:id/payment", async (req, res) => {
   );
 });
 orders.post("/:id/status", async (req, res) => {
-  const { status, reason } = z
+  const { status, reason, washingMachine } = z
     .object({
       status: z.enum([...workflow, "CANCELLED"]),
       reason: z.string().trim().min(3).max(500).optional(),
+      washingMachine: z.string().trim().min(1).max(80).optional(),
     })
     .strict()
     .parse(req.body);
   res.json(
     await atomic(async (tx) => {
       const o = await getOrder(tx, req.params.id);
+      let selectedMachine;
       if (status === "CANCELLED") {
         if (req.user.role !== "ADMIN")
           fail(403, "Only Admin can cancel orders");
@@ -350,6 +356,11 @@ orders.post("/:id/status", async (req, res) => {
           fail(409, "Follow the next laundry workflow stage");
         if (status === "CLAIMED" && o.paymentStatus !== "PAID")
           fail(409, "Receive full payment before claiming");
+        if (status === "WASHING") {
+          selectedMachine = washingMachine || o.washingMachine;
+          if (!selectedMachine)
+            fail(400, "Enter the washing machine before moving this order to Washing");
+        }
       }
       if (status === "WASHING") await consume(tx, o, req.user.id);
       await tx.order.update({
@@ -358,6 +369,7 @@ orders.post("/:id/status", async (req, res) => {
           status,
           claimedAt: status === "CLAIMED" ? new Date() : undefined,
           cancellationReason: status === "CANCELLED" ? reason : undefined,
+          ...(status === "WASHING" ? { washingMachine: selectedMachine } : {}),
         },
       });
       await tx.orderStatusHistory.create({
@@ -366,6 +378,7 @@ orders.post("/:id/status", async (req, res) => {
           oldStatus: o.status,
           newStatus: status,
           userId: req.user.id,
+          ...(status === "WASHING" ? { washingMachine: selectedMachine } : {}),
         },
       });
       const messages = {
@@ -397,6 +410,7 @@ orders.post("/:id/status", async (req, res) => {
         {
           oldStatus: o.status,
           newStatus: status,
+          ...(status === "WASHING" ? { washingMachine: selectedMachine } : {}),
           ...(reason ? { reason } : {}),
         },
       );
@@ -404,6 +418,7 @@ orders.post("/:id/status", async (req, res) => {
     }),
   );
 });
+
 orders.post("/:id/receipt", admin, async (req, res) => {
   const result = await atomic(async (tx) => {
     const o = await getOrder(tx, req.params.id);

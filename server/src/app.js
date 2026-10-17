@@ -5,7 +5,7 @@ import cors from "cors";
 import { rateLimit } from "express-rate-limit";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { db, atomic, audit } from "./db.js";
+import { db, atomic, audit, fail } from "./db.js";
 import { authRoutes, authenticate } from "./auth.js";
 import { orders, publicTracking, business } from "./orders.js";
 import { historicalOrders } from "./historical-orders.js";
@@ -117,6 +117,7 @@ app.get("/api/customers", async (req, res) => {
           OR: [
             { name: { contains: q, mode: "insensitive" } },
             { phone: { contains: q.replace(/[ ()-]/g, "") } },
+            { roomUnit: { contains: q, mode: "insensitive" } },
           ],
         }
       : {};
@@ -139,6 +140,25 @@ app.post("/api/customers", async (req, res) => {
       const c = await tx.customer.create({ data: v });
       await audit(tx, req.user.id, "CUSTOMER_CREATED", "Customer", c.id);
       return c;
+    }),
+  );
+});
+app.put("/api/customers/:id", async (req, res) => {
+  const v = customerSchema.parse(req.body);
+  res.json(
+    await atomic(async (tx) => {
+      const existing = await tx.customer.findUnique({
+        where: { id: req.params.id },
+      });
+      if (!existing) fail(404, "Customer not found");
+      const customer = await tx.customer.update({
+        where: { id: existing.id },
+        data: v,
+      });
+      await audit(tx, req.user.id, "CUSTOMER_UPDATED", "Customer", customer.id, {
+        roomUnit: customer.roomUnit,
+      });
+      return customer;
     }),
   );
 });

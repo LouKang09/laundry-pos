@@ -38,6 +38,7 @@ export function AdminHistoricalOrder() {
     [payment, setPayment] = useState("CASH"),
     [reference, setReference] = useState(""),
     [receiptDataUrl, setReceiptDataUrl] = useState(""),
+    [washingMachine, setWashingMachine] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(null),
@@ -149,7 +150,7 @@ export function AdminHistoricalOrder() {
             {customer ? (
               <div className="selected-customer">
                 <span className="avatar">{customer.name[0]}</span>
-                <div><strong>{customer.name}</strong><small>{customer.phone}</small></div>
+                <div><strong>{customer.name}</strong><small>{customer.phone}{customer.roomUnit ? " · " + customer.roomUnit : ""}</small></div>
                 <button className="secondary" onClick={() => setCustomer(null)}>Change</button>
               </div>
             ) : (
@@ -231,6 +232,14 @@ export function AdminHistoricalOrder() {
             ) : <Empty>Select services for the historical transaction.</Empty>}
           </div>
 
+          <Field label="Washing machine / machine number (optional)">
+            <input
+              value={washingMachine}
+              onChange={(event) => setWashingMachine(event.target.value)}
+              placeholder="e.g. Washer 1 · 12 kg"
+              maxLength={80}
+            />
+          </Field>
           <div className="total"><span>Total</span><strong>{cash(total)}</strong></div>
           <div className="water-payment-inline">
             <div className="section-title">
@@ -263,6 +272,7 @@ export function AdminHistoricalOrder() {
                   historicalDate,
                   customerId: customer.id,
                   status,
+                  washingMachine: washingMachine.trim() || undefined,
                   items: lines,
                   ...(paymentPayload(payment, reference, receiptDataUrl) ? { payment: paymentPayload(payment, reference, receiptDataUrl) } : {}),
                 });
@@ -273,6 +283,7 @@ export function AdminHistoricalOrder() {
                 setPayment("CASH");
                 setReference("");
                 setReceiptDataUrl("");
+                setWashingMachine("");
                 setRequestKey(crypto.randomUUID());
                 notify(`Historical transaction ${order.orderNumber} added`);
               } catch (err) {

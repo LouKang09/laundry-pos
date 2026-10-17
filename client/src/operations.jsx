@@ -16,7 +16,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Decimal from "decimal.js";
-import { api, post } from "./api";
+import { api, post, put } from "./api";
 import { useApp } from "./context";
 import { OFFICIAL_LOGO } from "./brand";
 import { PaymentDialog, paymentPayload } from "./payment-flow";
@@ -174,22 +174,23 @@ function Stat({ title, value, accent }) {
     </div>
   );
 }
-export function CustomerForm({ onSaved, onClose }) {
+export function CustomerForm({ onSaved, onClose, customer = null }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
+  const editing = !!customer;
   return (
-    <Modal title="New customer" onClose={onClose}>
+    <Modal title={editing ? "Edit customer" : "New customer"} onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
           setError("");
           try {
-            const c = await post(
-              "/customers",
-              Object.fromEntries(new FormData(e.currentTarget)),
-            );
-            onSaved(c);
+            const values = Object.fromEntries(new FormData(e.currentTarget));
+            const saved = editing
+              ? await put("/customers/" + customer.id, values)
+              : await post("/customers", values);
+            onSaved(saved);
           } catch (e) {
             setError(e.message);
           } finally {
@@ -198,22 +199,12 @@ export function CustomerForm({ onSaved, onClose }) {
         }}
       >
         <ErrorBox message={error} />
-        <Field
-          label="Customer name"
-          name="name"
-          required
-          maxLength={160}
-          autoFocus
-        />
-        <Field
-          label="Phone number"
-          name="phone"
-          type="tel"
-          required
-          placeholder="09XX XXX XXXX"
-          maxLength={20}
-        />
-        <SaveButton busy={busy}>Register customer</SaveButton>
+        <Field label="Customer name" name="name" required maxLength={160} autoFocus defaultValue={customer?.name || ""} />
+        <Field label="Phone number" name="phone" type="tel" required placeholder="09XX XXX XXXX" maxLength={20} defaultValue={customer?.phone || ""} />
+        <Field label="Room / Unit (optional)" name="roomUnit" maxLength={80} placeholder="e.g. Room 204, Unit 5B, Dorm 3" defaultValue={customer?.roomUnit || ""} />
+        <SaveButton busy={busy}>
+          {editing ? "Save customer" : "Register customer"}
+        </SaveButton>
       </form>
     </Modal>
   );
@@ -315,7 +306,7 @@ export function NewOrder() {
                     <button key={c.id} onClick={() => setCustomer(c)}>
                       <span>
                         <strong>{c.name}</strong>
-                        <small>{c.phone}</small>
+                        <small>{c.phone}{c.roomUnit ? " · " + c.roomUnit : ""}</small>
                       </span>
                       <Plus size={17} />
                     </button>
@@ -733,6 +724,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [paymentOpen, setPaymentOpen] = useState(false),
     [receipt, setReceipt] = useState(null),
     [reason, setReason] = useState(""),
+    [washingMachine, setWashingMachine] = useState(""),
     [cancel, setCancel] = useState(false);
   async function action(fn) {
     setBusy(true);
@@ -748,6 +740,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     }
   }
   const next = o && stages[stages.indexOf(o.status) + 1];
+  useEffect(() => setWashingMachine(o?.washingMachine || ""), [o?.washingMachine]);
   return (
     <Modal title={o?.orderNumber || "Order details"} onClose={onClose} wide>
       <ErrorBox message={error || err} />
@@ -759,7 +752,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
             <div className="detail-heading">
               <div>
                 <h2>{o.customerName}</h2>
-                <p>{o.customerPhone}</p>
+                <p>{o.customerPhone}{o.customerRoomUnit ? " · Room / Unit: " + o.customerRoomUnit : ""}</p>
               </div>
               <div className="actions">
                 <Badge value={o.status} />
@@ -808,6 +801,9 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 </strong>
               </p>
               <p>
+                Washing machine <strong>{o.washingMachine || "Not assigned yet"}</strong>
+              </p>
+              <p>
                 Payment{" "}
                 <strong>
                   {o.payment
@@ -851,6 +847,17 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     </button>
                   </div>
                 )}
+                {next === "WASHING" && (
+                  <Field label="Washing machine / machine number">
+                    <input
+                      value={washingMachine}
+                      onChange={(event) => setWashingMachine(event.target.value)}
+                      placeholder="e.g. Washer 1 · 12 kg"
+                      maxLength={80}
+                      required
+                    />
+                  </Field>
+                )}
                 {next && (
                   <div className="section-title">
                     <div>
@@ -869,11 +876,17 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                       className="primary"
                       disabled={
                         busy ||
-                        (next === "CLAIMED" && o.paymentStatus !== "PAID")
+                        (next === "CLAIMED" && o.paymentStatus !== "PAID") ||
+                        (next === "WASHING" && !washingMachine.trim())
                       }
                       onClick={() =>
                         action(() =>
-                          post("/orders/" + id + "/status", { status: next }),
+                          post("/orders/" + id + "/status", {
+                            status: next,
+                            ...(next === "WASHING"
+                              ? { washingMachine: washingMachine.trim() }
+                              : {}),
+                          }),
                         )
                       }
                     >
@@ -951,6 +964,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     <span>
                       {h.user.name}
                       <small>{date(h.createdAt)}</small>
+                      {h.washingMachine && <small>Machine: {h.washingMachine}</small>}
                     </span>
                   </div>
                 ))}
@@ -1032,6 +1046,7 @@ function Receipt({ data: o, onClose }) {
           {o.customerName}
           <br />
           {o.customerPhone}
+          {o.customerRoomUnit && <><br />Room / Unit: {o.customerRoomUnit}</>}
         </p>
         <p>{date(o.createdAt)}</p>
         <hr />
@@ -1057,6 +1072,8 @@ function Receipt({ data: o, onClose }) {
           {o.payment ? " · " + o.payment.method : ""}
         </p>
         <p>
+          Washing machine: {o.washingMachine || "Not assigned yet"}
+          <br />
           Approximate pickup
           <br />
           {date(o.estimatedFrom)} – {date(o.estimatedTo)}
@@ -1078,12 +1095,14 @@ export function Customers() {
     [page, setPage] = useState(1),
     [rev, setRev] = useState(0),
     [create, setCreate] = useState(false),
+    [editing, setEditing] = useState(null),
     [selected, setSelected] = useState(null);
   const { data, error, loading } = useData(
     "/customers?q=" + encodeURIComponent(q) + "&page=" + page,
     rev,
   );
   useEffect(() => setPage(1), [q]);
+  const refreshCustomers = () => setRev((v) => v + 1);
   return (
     <>
       <PageHead title="Customers">
@@ -1092,32 +1111,24 @@ export function Customers() {
         </button>
       </PageHead>
       <section className="panel">
-        <SearchBox
-          value={q}
-          onChange={setQ}
-          placeholder="Search customer name or phone"
-        />
+        <SearchBox value={q} onChange={setQ} placeholder="Search name, phone, room, or unit" />
         <ErrorBox message={error} />
         {loading ? (
           <Loading />
         ) : data?.rows.length ? (
           <>
-            <Table headers={["Customer", "Phone", "Orders", "Registered", ""]}>
+            <Table headers={["Customer", "Phone", "Room / Unit", "Orders", "Registered", ""]}>
               {data.rows.map((c) => (
                 <tr key={c.id}>
-                  <td>
-                    <strong>{c.name}</strong>
-                  </td>
+                  <td><strong>{c.name}</strong></td>
                   <td>{c.phone}</td>
+                  <td>{c.roomUnit || "—"}</td>
                   <td>{c._count.orders}</td>
                   <td>{date(c.createdAt)}</td>
-                  <td>
-                    <button
-                      className="secondary"
-                      onClick={() => setSelected(c)}
-                    >
-                      Order history
-                      <ArrowRight size={16} />
+                  <td className="actions">
+                    <button className="secondary" onClick={() => setEditing(c)}>Edit</button>
+                    <button className="secondary" onClick={() => setSelected(c)}>
+                      Order history <ArrowRight size={16} />
                     </button>
                   </td>
                 </tr>
@@ -1130,20 +1141,20 @@ export function Customers() {
         )}
       </section>
       {create && (
-        <CustomerForm
-          onClose={() => setCreate(false)}
-          onSaved={() => {
-            setCreate(false);
-            setRev((v) => v + 1);
-          }}
-        />
+        <CustomerForm onClose={() => setCreate(false)} onSaved={() => {
+          setCreate(false);
+          refreshCustomers();
+        }} />
+      )}
+      {editing && (
+        <CustomerForm customer={editing} onClose={() => setEditing(null)} onSaved={(updated) => {
+          setEditing(null);
+          if (selected?.id === updated.id) setSelected(updated);
+          refreshCustomers();
+        }} />
       )}
       {selected && (
-        <Modal
-          title={selected.name + " · Order history"}
-          onClose={() => setSelected(null)}
-          wide
-        >
+        <Modal title={selected.name + " · Order history"} onClose={() => setSelected(null)} wide>
           <OrderList customerId={selected.id} />
         </Modal>
       )}

@@ -1777,3 +1777,41 @@ td .actions {
   .water-payment-methods,.water-payment-methods.two{grid-template-columns:1fr}
   .water-receipt-actions{grid-template-columns:1fr 1fr}
 }
+
+
+/* Two-copy POS receipt printing and printer retry flow */
+.pos-print-overlay{position:fixed;inset:0;z-index:240;background:#e8eef3;overflow:auto;padding:18px}
+.pos-print-controls{position:sticky;top:0;z-index:2;max-width:760px;margin:0 auto 16px;padding:16px 18px;border:1px solid #d8e3e9;border-radius:16px;background:#fff;box-shadow:0 8px 30px #163d4d12}
+.pos-print-instructions{display:flex;align-items:center;gap:12px;color:#173f4d}
+.pos-print-instructions strong,.pos-print-instructions small{display:block}
+.pos-print-instructions small{margin-top:3px;color:#607785;font-size:.8rem}
+.pos-print-feedback{margin-top:13px}
+.pos-print-feedback p{display:flex;align-items:flex-start;gap:8px;line-height:1.5;font-size:.88rem}
+.pos-print-error{color:#9b3027}
+.pos-print-pages{display:grid;gap:18px;justify-items:center}
+.pos-receipt-copy{box-sizing:border-box;background:#fff;color:#111;width:360px;max-width:100%;padding:20px;font-family:monospace;font-size:11px;line-height:1.45;box-shadow:0 4px 24px #163d4d12}
+.pos-receipt-brand{display:flex;align-items:center;justify-content:center;gap:10px;text-align:left;margin-bottom:10px}
+.pos-receipt-brand img{width:44px;height:44px;object-fit:contain}
+.pos-receipt-brand h2{font-size:16px;margin:0}
+.pos-receipt-brand p{font-size:10px;margin:2px 0 0}
+.pos-receipt-copy h3{font-size:13px;text-align:center;margin:10px 0}
+.pos-receipt-centered{text-align:center}
+.pos-copy-label{text-align:center;border:1px dashed #333;padding:5px;font-weight:800;letter-spacing:.07em}
+.pos-receipt-copy hr{border:0;border-top:1px dashed #888;margin:12px 0}
+.pos-receipt-copy p{margin:7px 0}
+.pos-receipt-line{margin:10px 0}
+.pos-receipt-amount{display:block;text-align:right;margin-top:3px}
+.pos-receipt-total{display:flex;justify-content:space-between;gap:10px}
+.pos-receipt-qr{display:block;width:145px;height:145px;object-fit:contain;margin:12px auto}
+@media print{
+  body *{visibility:hidden!important}
+  .pos-print-overlay,.pos-print-overlay *{visibility:visible!important}
+  .pos-print-overlay{position:absolute!important;inset:0!important;z-index:auto!important;overflow:visible!important;padding:0!important;background:#fff!important}
+  .pos-print-controls{display:none!important}
+  .pos-print-pages{display:block!important}
+  .pos-receipt-copy{width:72mm!important;max-width:72mm!important;margin:0 auto!important;padding:4mm!important;box-shadow:none!important;font-size:9pt!important;page-break-after:always!important;break-after:page!important}
+  .pos-receipt-copy:last-child{page-break-after:auto!important;break-after:auto!important}
+  .pos-receipt-brand img{width:14mm!important;height:14mm!important}
+  .pos-receipt-qr{width:35mm!important;height:35mm!important}
+  @page{size:auto;margin:3mm}
+}
