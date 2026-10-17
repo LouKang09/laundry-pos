@@ -964,6 +964,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     <Badge value={h.newStatus} />
                     <span>
                       {h.user.name}
+                      <small>{h.user.email}</small>
                       <small>{date(h.createdAt)}</small>
                       {h.washingMachine && <small>Machine: {h.washingMachine}</small>}
                     </span>
