@@ -18,8 +18,8 @@ import {
 import Decimal from "decimal.js";
 import { api, post, put } from "./api";
 import { useApp } from "./context";
-import { OFFICIAL_LOGO } from "./brand";
 import { PaymentDialog, paymentPayload } from "./payment-flow";
+import { PosReceiptPrint } from "./pos-receipt-print";
 import {
   useData,
   PageHead,
@@ -1024,72 +1024,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
           })
         }
       />
-      {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
+      {receipt && <PosReceiptPrint data={receipt} onClose={() => setReceipt(null)} />}
     </Modal>
-  );
-}
-function Receipt({ data: o, onClose }) {
-  return (
-    <div className="receipt-overlay">
-      <div className="receipt-controls">
-        <button className="primary" onClick={() => window.print()}>
-          <Printer size={18} /> Print
-        </button>
-        <button className="secondary" onClick={onClose}>
-          Close
-        </button>
-      </div>
-      <article className="receipt">
-        <img className="receipt-brand-logo" src={OFFICIAL_LOGO} alt="" />
-        <h2>{o.business.name}</h2>
-        <p>ORDER / CLAIM RECEIPT · COPY {o.copy}</p>
-        <h3>{o.orderNumber}</h3>
-        <p>
-          {o.customerName}
-          <br />
-          {o.customerPhone}
-          {o.customerRoomUnit && <><br />Room / Unit: {o.customerRoomUnit}</>}
-        </p>
-        <p>{date(o.createdAt)}</p>
-        <hr />
-        {o.items.map((i) => (
-          <div key={i.id}>
-            <strong>
-              {i.serviceName} · {i.express ? "Express" : "Regular"}
-            </strong>
-            <p>
-              Actual: {i.actualQuantity} {i.unit}
-              <br />
-              Billable: {i.billableQuantity} {i.unit} × {cash(i.unitPrice)}
-              <b className="right">{cash(i.total)}</b>
-            </p>
-          </div>
-        ))}
-        <hr />
-        <h3>
-          Total <span className="right">{cash(o.total)}</span>
-        </h3>
-        <p>
-          {o.paymentStatus}
-          {o.payment ? " · " + o.payment.method : ""}
-        </p>
-        <p>
-          Washing machine: {o.washingMachine || "Not assigned yet"}
-          <br />
-          Approximate pickup
-          <br />
-          {date(o.estimatedFrom)} – {date(o.estimatedTo)}
-          <br />
-          <small>Timing may change. Check tracking for updates.</small>
-        </p>
-        <img src={o.qr} alt="Scan to track this order" />
-        <p>
-          Scan for laundry progress.
-          <br />
-          Keep this receipt for pickup.
-        </p>
-      </article>
-    </div>
   );
 }
 export function Customers() {

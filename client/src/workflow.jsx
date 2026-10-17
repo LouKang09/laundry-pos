@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ArrowRight,
   CalendarDays,
@@ -617,8 +617,7 @@ function QrScanner({ onClose, onDetected }) {
   return (
     <Modal title="Scan order QR" onClose={onClose}>
       <p className="muted">
-        Point the camera at the QR on the printed order receipt. The next laundry
-        phase will be confirmed before anything changes.
+        Scan the STAFF COPY QR to open the order workflow. The customer-copy QR is only for status lookup. The next phase is confirmed before anything changes.
       </p>
       <ErrorBox message={error} />
       <div
@@ -644,28 +643,159 @@ function QrScanner({ onClose, onDetected }) {
           e.preventDefault();
           const token = extractToken(manual);
           if (!token) {
-            setError("Paste a valid Laundry POS QR tracking link or token.");
+            setError("Paste a valid Laundry POS staff workflow QR link or token.");
             return;
           }
           onDetected(token);
         }}
       >
         <label className="field">
-          <span>Or paste QR tracking link</span>
+          <span>Or paste staff workflow QR link</span>
           <input
             value={manual}
             onChange={(e) => setManual(e.target.value)}
-            placeholder="https://…/track/…"
+            placeholder="https://…/scan/…"
           />
         </label>
         <button className="secondary" type="submit">
-          <QrCode size={18} /> Use tracking link
+          <QrCode size={18} /> Use staff QR link
         </button>
       </form>
     </Modal>
   );
 }
 
+export function StaffQrWorkflow() {
+  const { token = "" } = useParams();
+  const { notify } = useApp();
+  const [order, setOrder] = useState(null),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [machine, setMachine] = useState(""),
+    [busy, setBusy] = useState(false),
+    [stepSaved, setStepSaved] = useState(false),
+    [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    setStepSaved(false);
+    api("/orders/scan/" + token)
+      .then((result) => {
+        if (cancelled) return;
+        setOrder(result);
+        setMachine(result.washingMachine || "");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setOrder(null);
+        setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  async function advancePhase() {
+    if (!order?.nextStatus || stepSaved) return;
+    const targetStatus = order.nextStatus;
+    setBusy(true);
+    setError("");
+    try {
+      await post("/orders/" + order.id + "/status", {
+        status: targetStatus,
+        ...(targetStatus === "WASHING" ? { washingMachine: machine.trim() } : {}),
+      });
+      setStepSaved(true);
+      setSuccess(`${order.orderNumber}: ${label(order.status)} → ${label(targetStatus)} saved.`);
+      notify(`${order.orderNumber} moved to ${label(targetStatus)}.`);
+      try {
+        const updated = await api("/orders/scan/" + token);
+        setOrder(updated);
+        setMachine(updated.washingMachine || "");
+      } catch {
+        // The phase update is already saved; the next scan will reload the latest status.
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <PageHead title="Staff QR workflow" eyebrow="SCAN RECEIPT · UPDATE PHASE">
+        <Link className="secondary" to="/orders">Back to Orders</Link>
+      </PageHead>
+      <section className="panel">
+        <p className="muted">
+          Staff-only workflow. Each phase change is saved with the signed-in staff account and timestamp. Scan the staff QR again when the next phase is ready.
+        </p>
+        <ErrorBox message={error} />
+        {loading ? (
+          <Loading />
+        ) : order ? (
+          <>
+            <div className="detail-heading">
+              <div>
+                <h2>{order.orderNumber}</h2>
+                <p>
+                  {order.customerName}
+                  {order.customerRoomUnit ? " · Room / Unit: " + order.customerRoomUnit : ""}
+                </p>
+              </div>
+              <div className="actions">
+                <Badge value={order.status} />
+                <Badge value={order.paymentStatus} />
+              </div>
+            </div>
+            {order.washingMachine && <p>Washing machine: <strong>{order.washingMachine}</strong></p>}
+            {success && <p role="status" className="muted">{success}</p>}
+            {order.nextStatus ? (
+              <div style={{ marginTop: 18 }}>
+                <h3>Next phase: {label(order.nextStatus)}</h3>
+                {order.blockedReason && <ErrorBox message={order.blockedReason} />}
+                {order.nextStatus === "WASHING" && (
+                  <Field label="Washing machine / machine number">
+                    <input
+                      value={machine}
+                      onChange={(event) => setMachine(event.target.value)}
+                      placeholder="e.g. Washer 1 · 12 kg"
+                      maxLength={80}
+                      required
+                    />
+                  </Field>
+                )}
+                {stepSaved ? (
+                  <p className="muted">This phase is saved. Scan the Staff Copy QR again to record the next phase when it is ready.</p>
+                ) : order.blockedReason ? (
+                  <Link className="secondary" to="/pickup">Open Pickup queue</Link>
+                ) : (
+                  <button
+                    className="primary"
+                    disabled={busy || (order.nextStatus === "WASHING" && !machine.trim())}
+                    onClick={advancePhase}
+                  >
+                    {busy ? "Saving phase…" : `Confirm ${label(order.nextStatus)}`}
+                    <ArrowRight size={18} />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="muted">This order has completed the laundry workflow. Current status: {label(order.status)}.</p>
+            )}
+          </>
+        ) : null}
+      </section>
+    </>
+  );
+}
 export function OrderList({ mode = "orders" }) {
   const initialStatus = new URLSearchParams(location.search).get("status") || "";
   const [q, setQ] = useState(""),

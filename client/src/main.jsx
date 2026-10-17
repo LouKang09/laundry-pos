@@ -29,7 +29,7 @@ import {
 import { api, post, setCsrf } from "./api";
 import { Field, ErrorBox, Loading, SaveButton } from "./ui";
 import { Customers, Tracking } from "./operations";
-import { Dashboard, OrderList } from "./workflow";
+import { Dashboard, OrderList, StaffQrWorkflow } from "./workflow";
 import { PosOrder } from "./pos-order-loads";
 import { AdminHistoricalOrder } from "./admin-historical-load-order";
 import {
@@ -307,6 +307,7 @@ function Shell() {
                 element={admin ? <AdminHistoricalOrder /> : <PosOrder />}
               />
               <Route path="/orders" element={<OrderList />} />
+              <Route path="/scan/:token" element={<StaffQrWorkflow />} />
               <Route path="/pickup" element={<OrderList mode="pickup" />} />
               <Route
                 path="/transactions"

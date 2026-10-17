@@ -436,14 +436,24 @@ orders.post("/:id/receipt", admin, async (req, res) => {
     );
     return { ...o, business: await business(tx), copy: o.printCount + 1 };
   });
-  const base = process.env.APP_URL || "http://localhost:5173";
+  const base = (process.env.APP_URL || "http://localhost:5173").replace(/\/+$/, "");
+  const trackingUrl = `${base}/track/${result.trackingToken}`;
+  const staffWorkflowUrl = `${base}/scan/${result.trackingToken}`;
+  const customerQr = await QRCode.toDataURL(trackingUrl, {
+    width: 220,
+    margin: 1,
+  });
+  const staffQr = await QRCode.toDataURL(staffWorkflowUrl, {
+    width: 220,
+    margin: 1,
+  });
   res.json({
     ...result,
-    qr: await QRCode.toDataURL(`${base}/track/${result.trackingToken}`, {
-      width: 220,
-      margin: 1,
-    }),
-    trackingUrl: `${base}/track/${result.trackingToken}`,
+    qr: customerQr,
+    customerQr,
+    staffQr,
+    trackingUrl,
+    staffWorkflowUrl,
   });
 });
 export async function publicTracking(req, res) {

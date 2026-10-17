@@ -5,6 +5,9 @@ import { cash, date } from "./ui";
 
 function ReceiptCopy({ data: order, copy }) {
   const customerCopy = copy === 1;
+  const qr = customerCopy
+    ? order.customerQr || order.qr
+    : order.staffQr || order.qr;
   return (
     <article className="pos-receipt-copy">
       <div className="pos-receipt-brand">
@@ -61,13 +64,13 @@ function ReceiptCopy({ data: order, copy }) {
         <br />
         {date(order.estimatedFrom)} – {date(order.estimatedTo)}
         <br />
-        <small>Timing may change. Scan the QR to check the current status.</small>
+        <small>{customerCopy ? "Timing may change. Scan the QR to check the current status." : "Timing may change. Staff: scan this workflow QR to advance the next phase."}</small>
       </p>
-      <img className="pos-receipt-qr" src={order.qr} alt="Scan to track and update this order" />
+      <img className="pos-receipt-qr" src={qr} alt={customerCopy ? "Customer status tracking QR" : "Staff phase workflow QR"} />
       <p className="pos-receipt-centered">
         {customerCopy
-          ? "Customer copy — keep this receipt for pickup."
-          : "Staff copy — scan this QR to advance the laundry phase."}
+          ? "Customer copy — scan this QR to check laundry status and keep it for pickup."
+          : "Staff copy — scan this QR in Laundry POS or with a phone camera while signed in to move the next phase."}
       </p>
     </article>
   );
