@@ -555,7 +555,7 @@ export function NewOrder() {
     </>
   );
 }
-export function OrderList({ mode = "orders", customerId }) {
+export function OrderList({ mode = "orders", customerId, deletedOnly = false }) {
   const { admin } = useApp();
   const [q, setQ] = useState(""),
     [status, setStatus] = useState(
@@ -564,7 +564,7 @@ export function OrderList({ mode = "orders", customerId }) {
     [page, setPage] = useState(1),
     [rev, setRev] = useState(0),
     [selected, setSelected] = useState(null),
-    [deletedView, setDeletedView] = useState(false);
+    [deletedView, setDeletedView] = useState(deletedOnly);
   const path =
     "/orders?q=" +
     encodeURIComponent(q) +
@@ -589,12 +589,12 @@ export function OrderList({ mode = "orders", customerId }) {
     <>
       {!customerId && (
         <PageHead title={title}>
-          {mode === "transactions" && admin && (
+          {mode === "transactions" && admin && !deletedOnly && (
             <button className="secondary" onClick={() => { setDeletedView((v) => !v); setPage(1); setStatus(""); }}>
               <Trash2 size={17} /> {deletedView ? "Back to transactions" : "Deleted transactions"}
             </button>
           )}
-          {!deletedView && <Link to="/new" className="primary">
+          {!deletedView && !deletedOnly && <Link to="/new" className="primary">
             <Plus size={18} /> New order
           </Link>}
         </PageHead>
@@ -610,7 +610,7 @@ export function OrderList({ mode = "orders", customerId }) {
                 : "Search order #, customer name, or phone"
             }
           />
-          {!deletedView && <select
+          {!deletedView && !deletedOnly && <select
             aria-label="Laundry status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
