@@ -264,7 +264,7 @@ test("08 inventory replenish, adjust, map and atomic insufficient-stock rejectio
     type: "CONSUMPTION",
     quantity: "100",
     reason: "Too much",
-  }).expect(400);
+  }).expect(409);
   await call(staff, sc, "post", "/admin/inventory/" + supply.id + "/movement", {
     type: "REPLENISHMENT",
     quantity: "5",
@@ -593,7 +593,7 @@ test("24 Admin can edit, audit, and soft-delete a transaction", async () => {
   assert.equal(edited.body.total, "360");
   assert.equal(edited.body.items[0].actualQuantity, "2");
   const detail = await admin.get("/api/orders/" + created.id).expect(200);
-  assert(detail.transactionHistory.some((entry) => entry.action === "TRANSACTION_EDITED"));
+  assert(detail.body.transactionHistory.some((entry) => entry.action === "TRANSACTION_EDITED"));
   await call(staff, sc, "delete", "/orders/" + created.id).expect(403);
   await call(admin, ac, "delete", "/orders/" + created.id).expect(200);
   await admin.get("/api/orders?q=" + encodeURIComponent(created.orderNumber) + "&view=customer").expect(200).then((r) => assert.equal(r.body.total, 0));
