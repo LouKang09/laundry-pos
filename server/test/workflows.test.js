@@ -264,7 +264,7 @@ test("08 inventory replenish, adjust, map and atomic insufficient-stock rejectio
     type: "CONSUMPTION",
     quantity: "100",
     reason: "Too much",
-  }).expect(409);
+  }).expect(400);
   await call(staff, sc, "post", "/admin/inventory/" + supply.id + "/movement", {
     type: "REPLENISHMENT",
     quantity: "5",
