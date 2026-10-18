@@ -118,18 +118,28 @@ test("03 configure KG/piece services and decimal prices", async () => {
   let r = await call(admin, ac, "post", "/admin/services", {
     name: prefix + " Wash",
     unit: "KG",
-    regularPrice: "40.15",
-    expressPrice: "60.25",
-    minimumQuantity: "7",
+    regularFullPrice: "281.05",
+    regularFullQuantity: "7",
+    regularHalfPrice: "140.53",
+    regularHalfQuantity: "3.5",
+    expressFullPrice: "421.75",
+    expressFullQuantity: "7",
+    expressHalfPrice: "210.88",
+    expressHalfQuantity: "3.5",
     active: true,
   }).expect(201);
   kg = r.body;
   r = await call(admin, ac, "post", "/admin/services", {
     name: prefix + " Comforter",
     unit: "PIECE",
-    regularPrice: "180",
-    expressPrice: "250",
-    minimumQuantity: "1",
+    regularFullPrice: "180",
+    regularFullQuantity: "1",
+    regularHalfPrice: "180",
+    regularHalfQuantity: "1",
+    expressFullPrice: "250",
+    expressFullQuantity: "1",
+    expressHalfPrice: "250",
+    expressHalfQuantity: "1",
     active: true,
   }).expect(201);
   piece = r.body;
@@ -201,8 +211,8 @@ test("06 paid GCash express, reference required and unique", async () => {
     orderBody(items, { method: "GCASH", reference }),
   ).expect(201);
   gcashOrder = r.body;
-  assert.equal(gcashOrder.total, "739.53");
-  assert.equal(gcashOrder.items[0].total, "489.53");
+  assert.equal(gcashOrder.total, "882.63");
+  assert.equal(gcashOrder.items[0].total, "632.63");
   await call(
     staff,
     sc,
@@ -342,9 +352,14 @@ test("12 historical price snapshots survive service changes", async () => {
   await call(admin, ac, "put", "/admin/services/" + kg.id, {
     name: kg.name,
     unit: "KG",
-    regularPrice: "99",
-    expressPrice: "120",
-    minimumQuantity: "8",
+    regularFullPrice: "99",
+    regularFullQuantity: "7",
+    regularHalfPrice: "140.53",
+    regularHalfQuantity: "3.5",
+    expressFullPrice: "421.75",
+    expressFullQuantity: "7",
+    expressHalfPrice: "210.88",
+    expressHalfQuantity: "3.5",
     active: true,
   }).expect(200);
   const r = await staff.get("/api/orders/" + unpaid.id).expect(200);
