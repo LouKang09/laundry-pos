@@ -222,10 +222,8 @@ test("06 paid GCash express, reference required and unique", async () => {
   ).expect(409);
 });
 test("07 prevent arbitrary edits, deletes, status skipping", async () => {
-  await call(staff, sc, "put", "/orders/" + unpaid.id, { total: "1" }).expect(
-    404,
-  );
-  await call(staff, sc, "delete", "/orders/" + unpaid.id).expect(404);
+  await call(staff, sc, "put", "/orders/" + unpaid.id, { total: "1" }).expect(403);
+  await call(staff, sc, "delete", "/orders/" + unpaid.id).expect(403);
   await call(staff, sc, "post", "/orders/" + unpaid.id + "/status", {
     status: "READY",
   }).expect(409);
@@ -246,7 +244,7 @@ test("08 inventory replenish, adjust, map and atomic insufficient-stock rejectio
     { inventoryItemId: supply.id, quantityPerUnit: "0.1" },
   ]).expect(200);
   await call(staff, sc, "post", "/orders/" + unpaid.id + "/status", {
-    status: "WASHING",
+    status: "WASHING", washingMachine: "Washer 1",
   }).expect(409);
   assert.equal(
     (await db.order.findUnique({ where: { id: unpaid.id } })).status,
@@ -276,7 +274,7 @@ test("08 inventory replenish, adjust, map and atomic insufficient-stock rejectio
 test("09 controlled workflow and notifications at three stages", async () => {
   for (const status of ["WASHING", "DRYING", "FOLDING", "READY"])
     await call(staff, sc, "post", "/orders/" + unpaid.id + "/status", {
-      status,
+      status, ...(status === "WASHING" ? { washingMachine: "Washer 1" } : {}),
     }).expect(200);
   const r = await staff.get("/api/orders/" + unpaid.id).expect(200);
   assert.equal(r.body.statusHistory.length, 5);
