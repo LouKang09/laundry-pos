@@ -950,7 +950,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 <p className="muted">This hides it from active transactions and reports. Its history is retained.</p>
                 <div className="actions">
                   <button className="secondary" onClick={() => setConfirmDelete(false)}>Keep transaction</button>
-                  <button className="danger" disabled={busy} onClick={() => action(async () => { await api("/orders/" + id, { method: "DELETE" }); onClose(); notify("Transaction moved to Deleted"); })}>Confirm delete</button>
+                  <button className="danger" disabled={busy} onClick={() => action(async () => { await api("/orders/" + id, { method: "DELETE" }); notify("Transaction moved to Deleted"); }).then(onClose)}>Confirm delete</button>
                 </div>
               </div>
             )}
