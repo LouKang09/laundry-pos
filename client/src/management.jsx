@@ -735,9 +735,20 @@ export function UserManagement() {
                   <Badge value={u.active ? "ACTIVE" : "INACTIVE"} />
                 </td>
                 <td>
-                  <button className="secondary" onClick={() => setEdit(u)}>
-                    <Edit3 size={16} /> Edit
-                  </button>
+                  <div className="actions">
+                    <button className="secondary" onClick={() => setEdit(u)}>
+                      <Edit3 size={16} /> Edit
+                    </button>
+                    {u.active && <button className="danger" onClick={async () => {
+                      if (!window.confirm("Delete " + u.name + "? Their account will be deactivated and they will be signed out.")) return;
+                      try {
+                        await api("/admin/users/" + u.id, { method: "DELETE" });
+                        setRev((v) => v + 1);
+                      } catch (e) {
+                        window.alert(e.message);
+                      }
+                    }}><Trash2 size={16} /> Delete</button>}
+                  </div>
                 </td>
               </tr>
             ))}
