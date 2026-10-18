@@ -770,6 +770,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
               <div className="actions">
                 <Badge value={o.status} />
                 <Badge value={o.paymentStatus} />
+                {o.deletedAt && <Badge value="DELETED" />}
               </div>
             </div>
             <div className="workflow">
