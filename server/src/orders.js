@@ -188,6 +188,9 @@ orders.get("/", async (req, res) => {
     view = z
       .enum(["orders", "pickup", "transactions", "customer"])
       .parse(req.query.view || "orders");
+  const deletedView = req.query.deleted === "1" || req.query.deleted === "true";
+  if (deletedView && (view !== "transactions" || req.user.role !== "ADMIN"))
+    fail(403, "Deleted transactions are available to Admin only");
   const requestedStatus = req.query.status
     ? z.enum([...workflow, "CANCELLED"]).parse(req.query.status)
     : undefined;
@@ -210,9 +213,9 @@ orders.get("/", async (req, res) => {
       fail(400, "Pickup only shows Ready orders");
     scope = { status: "READY" };
   } else if (view === "transactions") {
-    if (requestedStatus && requestedStatus !== "CLAIMED")
+    if (!deletedView && requestedStatus && requestedStatus !== "CLAIMED")
       fail(400, "Transactions only shows Claimed orders");
-    scope = {
+    scope = deletedView ? {} : {
       status: "CLAIMED",
       ...(staffToday ? { claimedAt: today } : {}),
     };
@@ -224,6 +227,7 @@ orders.get("/", async (req, res) => {
   }
   const where = {
     ...scope,
+    deletedAt: deletedView ? { not: null } : null,
     ...(req.query.customerId
       ? { customerId: String(req.query.customerId) }
       : {}),
@@ -305,7 +309,7 @@ orders.get("/:id/payment-receipt", async (req, res) => {
 
 orders.get("/:id", async (req, res) => {
   const o = await getOrder(db, req.params.id);
-  const [statusHistory, notifications] = await Promise.all([
+  const [statusHistory, notifications, transactionHistory] = await Promise.all([
     db.orderStatusHistory.findMany({
       where: { orderId: o.id },
       include: { user: { select: { name: true, email: true } } },
@@ -315,9 +319,15 @@ orders.get("/:id", async (req, res) => {
       where: { orderId: o.id },
       orderBy: { createdAt: "asc" },
     }),
+    db.auditLog.findMany({
+      where: { entity: "Order", entityId: o.id },
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
   ]);
   await audit(db, req.user.id, "ORDER_VIEWED", "Order", o.id);
-  res.json({ ...o, statusHistory, notifications });
+  res.json({ ...o, statusHistory, notifications, transactionHistory });
 });
 orders.post("/:id/payment", async (req, res) => {
   const payment = paymentSchema.parse(req.body);
