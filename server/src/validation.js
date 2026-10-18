@@ -31,7 +31,7 @@ export const phone = z
 export const customerSchema = z
   .object({
     name: text,
-    phone,
+    phone: z.union([phone, z.literal("")]).optional().transform((v) => v || ""),
     roomUnit: z.string().trim().max(80).optional().transform((v) => v || null),
   })
   .strict();

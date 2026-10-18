@@ -797,7 +797,7 @@ export function StaffQrWorkflow() {
     </>
   );
 }
-export function OrderList({ mode = "orders" }) {
+export function OrderList({ mode = "orders", deletedOnly = false }) {
   const initialStatus = new URLSearchParams(location.search).get("status") || "";
   const [q, setQ] = useState(""),
     [status, setStatus] = useState(
@@ -819,11 +819,13 @@ export function OrderList({ mode = "orders" }) {
     page +
     "&view=" +
     mode +
-    (mode === "orders" && status ? "&status=" + status : "");
+    (mode === "orders" && status ? "&status=" + status : "") +
+    (deletedOnly ? "&deleted=1" : "");
   const { data, error, loading } = useData(path, rev);
-  useEffect(() => setPage(1), [q, status, mode]);
-  const title =
-    mode === "pickup"
+  useEffect(() => setPage(1), [q, status, mode, deletedOnly]);
+  const title = deletedOnly
+    ? "Deleted Transactions"
+    : mode === "pickup"
       ? "Pickup & claim"
       : mode === "transactions"
         ? "Transactions"
@@ -842,14 +844,18 @@ export function OrderList({ mode = "orders" }) {
   return (
     <>
       <PageHead title={title}>
-        <button className="secondary" onClick={() => setScanner(true)}>
-          <Camera size={18} /> Scan QR
-        </button>
-        <Link to="/new" className="primary">
-          <Plus size={18} /> New order
-        </Link>
+        {!deletedOnly && (
+          <button className="secondary" onClick={() => setScanner(true)}>
+            <Camera size={18} /> Scan QR
+          </button>
+        )}
+        {!deletedOnly && (
+          <Link to="/new" className="primary">
+            <Plus size={18} /> New order
+          </Link>
+        )}
       </PageHead>
-      {!admin && mode !== "pickup" && (
+      {!deletedOnly && !admin && mode !== "pickup" && (
         <p className="muted">
           {mode === "orders"
             ? "Laundry Staff Orders shows today's Received, Washing, Drying, and Folding work only."
@@ -897,10 +903,15 @@ export function OrderList({ mode = "orders" }) {
             unpaid. Claimed orders move to Transactions automatically.
           </p>
         )}
-        {mode === "transactions" && (
+        {mode === "transactions" && !deletedOnly && (
           <p className="muted">
             Transactions contains claimed orders. Admin sees the full history;
             Laundry Staff sees today's claimed transactions.
+          </p>
+        )}
+        {deletedOnly && (
+          <p className="muted">
+            Deleted transactions are retained here for audit and reference. They are excluded from active transactions and reports.
           </p>
         )}
         <ErrorBox message={scanError || error} />
@@ -927,6 +938,7 @@ export function OrderList({ mode = "orders" }) {
                       {o.orderNumber}
                     </button>
                     <small>{date(o.createdAt)}</small>
+                    {o.deletedAt && <small>Deleted: {date(o.deletedAt)}</small>}
                   </td>
                   <td>
                     <strong>{o.customerName}</strong>
@@ -965,7 +977,7 @@ export function OrderList({ mode = "orders" }) {
             <Pager page={page} total={data.total} onChange={setPage} />
           </>
         ) : (
-          <Empty>No matching orders.</Empty>
+          <Empty>{deletedOnly ? "No deleted transactions yet." : "No matching orders."}</Empty>
         )}
       </section>
       {selected && (
