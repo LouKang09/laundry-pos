@@ -439,8 +439,9 @@ orders.delete("/:id", admin, async (req, res) => {
       status: order.status,
       deletedAt: deletedAt.toISOString(),
     });
-    res.json({ ok: true, id: order.id, deletedAt });
+    return { ok: true, id: order.id, deletedAt };
   });
+  res.json(result);
 });
 orders.post("/:id/payment", async (req, res) => {
   const payment = paymentSchema.parse(req.body);
