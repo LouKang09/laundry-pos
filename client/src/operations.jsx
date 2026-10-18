@@ -202,7 +202,7 @@ export function CustomerForm({ onSaved, onClose, customer = null }) {
       >
         <ErrorBox message={error} />
         <Field label="Customer name" name="name" required maxLength={160} autoFocus defaultValue={customer?.name || ""} />
-        <Field label="Phone number (optional)" name="phone" type="tel" placeholder="09XX XXX XXXX" maxLength={20} defaultValue={customer?.phone || ""} />
+        <Field label="Phone number" name="phone" type="tel" placeholder="09XX XXX XXXX (optional)" maxLength={20} defaultValue={customer?.phone || ""} />
         <Field label="Room / Unit (optional)" name="roomUnit" maxLength={80} placeholder="e.g. Room 204, Unit 5B, Dorm 3" defaultValue={customer?.roomUnit || ""} />
         <SaveButton busy={busy}>
           {editing ? "Save customer" : "Register customer"}
