@@ -613,6 +613,6 @@ test("25 Admin can delete a user without a separate history view", async () => {
   }).expect(201)).body;
   await call(admin, ac, "delete", "/admin/users/" + created.id).expect(200);
   const users = await admin.get("/api/admin/users").expect(200);
-  assert.equal(users.find((u) => u.id === created.id).active, false);
+  assert.equal(users.body.find((u) => u.id === created.id).active, false);
   await admin.get("/api/admin/users/" + created.id + "/history").expect(404);
 });
