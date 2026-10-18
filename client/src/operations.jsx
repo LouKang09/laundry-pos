@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Plus,
+  Edit3,
   ArrowUpRight,
   ArrowRight,
   Shirt,
@@ -555,13 +556,15 @@ export function NewOrder() {
   );
 }
 export function OrderList({ mode = "orders", customerId }) {
+  const { admin } = useApp();
   const [q, setQ] = useState(""),
     [status, setStatus] = useState(
       new URLSearchParams(location.search).get("status") || "",
     ),
     [page, setPage] = useState(1),
     [rev, setRev] = useState(0),
-    [selected, setSelected] = useState(null);
+    [selected, setSelected] = useState(null),
+    [deletedView, setDeletedView] = useState(false);
   const path =
     "/orders?q=" +
     encodeURIComponent(q) +
@@ -570,7 +573,8 @@ export function OrderList({ mode = "orders", customerId }) {
     "&view=" +
     mode +
     (status ? "&status=" + status : "") +
-    (customerId ? "&customerId=" + customerId : "");
+    (customerId ? "&customerId=" + customerId : "") +
+    (deletedView ? "&deleted=1" : "");
   const { data, error, loading } = useData(path, rev);
   useEffect(() => {
     setPage(1);
@@ -579,15 +583,20 @@ export function OrderList({ mode = "orders", customerId }) {
     mode === "pickup"
       ? "Pickup & claim"
       : mode === "transactions"
-        ? "Transactions"
+        ? deletedView ? "Deleted transactions" : "Transactions"
         : "Orders";
   return (
     <>
       {!customerId && (
         <PageHead title={title}>
-          <Link to="/new" className="primary">
+          {mode === "transactions" && admin && (
+            <button className="secondary" onClick={() => { setDeletedView((v) => !v); setPage(1); setStatus(""); }}>
+              <Trash2 size={17} /> {deletedView ? "Back to transactions" : "Deleted transactions"}
+            </button>
+          )}
+          {!deletedView && <Link to="/new" className="primary">
             <Plus size={18} /> New order
-          </Link>
+          </Link>}
         </PageHead>
       )}
       <section className="panel">
@@ -601,7 +610,7 @@ export function OrderList({ mode = "orders", customerId }) {
                 : "Search order #, customer name, or phone"
             }
           />
-          <select
+          {!deletedView && <select
             aria-label="Laundry status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -610,7 +619,7 @@ export function OrderList({ mode = "orders", customerId }) {
             {[...stages, "CANCELLED"].map((s) => (
               <option key={s}>{s}</option>
             ))}
-          </select>
+          </select>}
           <button
             className="secondary"
             onClick={() => setRev((v) => v + 1)}
@@ -680,7 +689,7 @@ export function OrderList({ mode = "orders", customerId }) {
                   <td>
                     {o.user.name}
                     <small>
-                      {o.claimedAt ? date(o.claimedAt) : "Not claimed"}
+                      {deletedView ? "Deleted " + date(o.deletedAt) : o.claimedAt ? date(o.claimedAt) : "Not claimed"}
                     </small>
                   </td>
                   <td>
@@ -727,7 +736,9 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [receipt, setReceipt] = useState(null),
     [reason, setReason] = useState(""),
     [washingMachine, setWashingMachine] = useState(""),
-    [cancel, setCancel] = useState(false);
+    [cancel, setCancel] = useState(false),
+    [editing, setEditing] = useState(false),
+    [confirmDelete, setConfirmDelete] = useState(false);
   async function action(fn) {
     setBusy(true);
     setErr("");
@@ -832,7 +843,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 Total <strong>{cash(o.total)}</strong>
               </p>
             </div>
-            {o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
+            {!o.deletedAt && o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
               <div className="action-panel">
                 {o.paymentStatus === "UNPAID" && (
                   <div>
@@ -900,7 +911,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
               </div>
             )}
             <div className="actions detail-actions">
-              {admin && (
+              {admin && !o.deletedAt && (
                 <button
                   className="secondary"
                   disabled={busy}
@@ -914,14 +925,16 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                   {o.printCount ? "Reprint receipt" : "Print receipt"}
                 </button>
               )}
-              <Link
+              {!o.deletedAt && <Link
                 className="secondary"
                 target="_blank"
                 to={"/track/" + o.trackingToken}
               >
                 Public tracking
                 <ArrowUpRight size={16} />
-              </Link>
+              </Link>}
+              {admin && !o.deletedAt && <button className="secondary" disabled={busy} onClick={() => setEditing(true)}><Edit3 size={17} /> Edit transaction</button>}
+              {admin && !o.deletedAt && <button className="danger" disabled={busy} onClick={() => setConfirmDelete((v) => !v)}><Trash2 size={17} /> Delete transaction</button>}
               {admin &&
                 o.status === "RECEIVED" &&
                 o.paymentStatus === "UNPAID" && (
@@ -930,6 +943,16 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                   </button>
                 )}
             </div>
+            {confirmDelete && (
+              <div className="action-panel">
+                <h3>Move transaction to Deleted?</h3>
+                <p className="muted">This hides it from active transactions and reports. Its history is retained.</p>
+                <div className="actions">
+                  <button className="secondary" onClick={() => setConfirmDelete(false)}>Keep transaction</button>
+                  <button className="danger" disabled={busy} onClick={() => action(async () => { await api("/orders/" + id, { method: "DELETE" }); onClose(); notify("Transaction moved to Deleted"); })}>Confirm delete</button>
+                </div>
+              </div>
+            )}
             {cancel && (
               <div className="action-panel">
                 <Field
@@ -973,6 +996,18 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 ))}
               </section>
               <section>
+                <h3>Transaction history</h3>
+                {o.transactionHistory?.length ? o.transactionHistory.filter((h) => h.action !== "ORDER_VIEWED").map((h) => (
+                  <div className="history-item" key={h.id}>
+                    <span>
+                      <strong>{label(h.action)}</strong>
+                      <small>{h.user?.name || "System"} · {date(h.createdAt)}</small>
+                      {h.metadata && <details><summary>View details</summary><pre className="history-json">{JSON.stringify(h.metadata, null, 2)}</pre></details>}
+                    </span>
+                  </div>
+                )) : <p className="muted">No edits or transaction actions recorded yet.</p>}
+              </section>
+              <section>
                 <h3>Customer notifications</h3>
                 {o.notifications?.length ? (
                   o.notifications.map((n) => (
@@ -998,6 +1033,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
           </>
         )
       )}
+      {editing && o && <TransactionEditor order={o} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); setRev((v) => v + 1); onChanged(); notify("Transaction updated"); }} />}
       <PaymentDialog
         open={paymentOpen}
         onClose={() => !busy && setPaymentOpen(false)}
@@ -1029,6 +1065,83 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     </Modal>
   );
 }
+function localDateTime(value) {
+  if (!value) return "";
+  const dateValue = new Date(value);
+  return new Date(dateValue.getTime() - dateValue.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function TransactionEditor({ order, onClose, onSaved }) {
+  const { data: services, error: servicesError } = useData("/services");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const canEditLines = order.status === "RECEIVED" && order.paymentStatus === "UNPAID";
+  const [form, setForm] = useState(() => ({
+    customerName: order.customerName || "",
+    customerPhone: order.customerPhone || "",
+    customerRoomUnit: order.customerRoomUnit || "",
+    washingMachine: order.washingMachine || "",
+    estimatedFrom: localDateTime(order.estimatedFrom),
+    estimatedTo: localDateTime(order.estimatedTo),
+    items: order.items.map((i) => ({
+      serviceId: i.serviceId,
+      actualQuantity: String(i.actualQuantity),
+      express: i.express,
+    })),
+  }));
+  const setField = (name, value) => setForm((old) => ({ ...old, [name]: value }));
+  const setLine = (index, name, value) => setForm((old) => ({
+    ...old,
+    items: old.items.map((item, i) => i === index ? { ...item, [name]: value } : item),
+  }));
+  async function save(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await put("/orders/" + order.id, {
+        ...form,
+        customerRoomUnit: form.customerRoomUnit.trim() || null,
+        washingMachine: form.washingMachine.trim() || null,
+        estimatedFrom: form.estimatedFrom ? new Date(form.estimatedFrom).toISOString() : null,
+        estimatedTo: form.estimatedTo ? new Date(form.estimatedTo).toISOString() : null,
+        items: form.items.map((i) => ({ ...i, actualQuantity: String(i.actualQuantity) })),
+      });
+      onSaved();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title={"Edit transaction · " + order.orderNumber} onClose={onClose} wide>
+      <form onSubmit={save}>
+        <ErrorBox message={error || servicesError} />
+        <div className="form-grid">
+          <Field label="Customer name" value={form.customerName} onChange={(e) => setField("customerName", e.target.value)} required maxLength={160} />
+          <Field label="Phone number" value={form.customerPhone} onChange={(e) => setField("customerPhone", e.target.value)} required maxLength={20} />
+          <Field label="Room / Unit" value={form.customerRoomUnit} onChange={(e) => setField("customerRoomUnit", e.target.value)} maxLength={80} />
+          <Field label="Washing machine" value={form.washingMachine} onChange={(e) => setField("washingMachine", e.target.value)} maxLength={80} />
+          <Field label="Estimated pickup from" type="datetime-local" value={form.estimatedFrom} onChange={(e) => setField("estimatedFrom", e.target.value)} />
+          <Field label="Estimated pickup to" type="datetime-local" value={form.estimatedTo} onChange={(e) => setField("estimatedTo", e.target.value)} />
+        </div>
+        <div className="section-title"><h3>Services and quantities</h3><span className="muted small">{canEditLines ? "Editable before processing/payment" : "Locked after processing or payment"}</span></div>
+        {!canEditLines && <p className="muted small">Customer and pickup details can still be edited. Service quantities and total are locked to protect paid totals and inventory history.</p>}
+        {form.items.map((item, index) => (
+          <div className="edit-line" key={index}>
+            <label className="field"><span>Service</span><select disabled={!canEditLines} value={item.serviceId} onChange={(e) => setLine(index, "serviceId", e.target.value)}>{(services || []).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+            <Field label="Quantity" type="number" min="0.001" step="0.001" value={item.actualQuantity} disabled={!canEditLines} onChange={(e) => setLine(index, "actualQuantity", e.target.value)} required />
+            <label className="field"><span>Speed</span><select disabled={!canEditLines} value={item.express ? "EXPRESS" : "REGULAR"} onChange={(e) => setLine(index, "express", e.target.value === "EXPRESS")}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></label>
+            {canEditLines && <button type="button" className="icon" aria-label="Remove service" disabled={form.items.length <= 1} onClick={() => setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }))}><Trash2 size={17} /></button>}
+          </div>
+        ))}
+        {canEditLines && <button type="button" className="secondary" disabled={!services?.length} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: services[0].id, actualQuantity: "1", express: false }] }))}><Plus size={16} /> Add service</button>}
+        <div className="actions"><button type="button" className="secondary" onClick={onClose}>Cancel</button><SaveButton busy={busy}>Save transaction</SaveButton></div>
+      </form>
+    </Modal>
+  );
+}
+
 export function Customers() {
   const [q, setQ] = useState(""),
     [page, setPage] = useState(1),
