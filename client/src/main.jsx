@@ -15,6 +15,7 @@ import {
   Users,
   PackageCheck,
   ReceiptText,
+  Trash2,
   Printer,
   Boxes,
   Wallet,
@@ -54,6 +55,7 @@ const nav = [
   ["/customers", "Customers", Users],
   ["/pickup", "Pickup", PackageCheck],
   ["/transactions", "Transactions", ReceiptText],
+  ["/deleted-transactions", "Deleted Transactions", Trash2, true],
   ["/receipts", "Receipt Center", Printer],
   ["/inventory", "Inventory", Boxes, true],
   ["/expenses", "Expenses", Wallet, true],
@@ -242,7 +244,7 @@ function Shell() {
               .filter((n) => !n[3] || admin)
               .map(([to, title, Icon], i) => (
                 <React.Fragment key={to}>
-                  {i === 7 && <p className="navlabel">MANAGEMENT</p>}
+                  {i === 8 && <p className="navlabel">MANAGEMENT</p>}
                   <NavLink
                     to={to}
                     end={to === "/"}
@@ -312,6 +314,10 @@ function Shell() {
               <Route
                 path="/transactions"
                 element={<OrderList mode="transactions" />}
+              />
+              <Route
+                path="/deleted-transactions"
+                element={guarded(<OrderList mode="transactions" deletedOnly />)}
               />
               <Route path="/receipts" element={<ReceiptCenter />} />
               <Route path="/customers" element={<Customers />} />
