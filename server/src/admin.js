@@ -64,6 +64,24 @@ management.put("/users/:id", async (req, res) => {
     }),
   );
 });
+management.delete("/users/:id", async (req, res) => {
+  const result = await atomic(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: req.params.id } });
+    if (!user) fail(404, "User not found");
+    if (user.id === req.user.id) fail(400, "You cannot delete your own account");
+    if (user.active && user.role === "ADMIN" &&
+        (await tx.user.count({ where: { role: "ADMIN", active: true } })) <= 1)
+      fail(409, "Keep at least one active Admin");
+    await tx.user.update({ where: { id: user.id }, data: { active: false } });
+    await tx.session.deleteMany({ where: { userId: user.id } });
+    await audit(tx, req.user.id, "USER_DELETED", "User", user.id, {
+      role: user.role,
+      deactivated: true,
+    });
+    return { ok: true, id: user.id };
+  });
+  res.json(result);
+});
 management.post("/services", async (req, res) => {
   const v = serviceSchema.parse(req.body);
   res.status(201).json(
