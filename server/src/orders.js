@@ -383,8 +383,8 @@ orders.put("/:id", admin, async (req, res) => {
       customerPhone: old.customerPhone,
       customerRoomUnit: old.customerRoomUnit,
       washingMachine: old.washingMachine,
-      estimatedFrom: old.estimatedFrom,
-      estimatedTo: old.estimatedTo,
+      estimatedFrom: old.estimatedFrom?.toISOString() || null,
+      estimatedTo: old.estimatedTo?.toISOString() || null,
       total: old.total.toString(),
       items: old.items.map((i) => ({
         serviceId: i.serviceId, serviceName: i.serviceName,
@@ -411,8 +411,8 @@ orders.put("/:id", admin, async (req, res) => {
         customerPhone: saved.customerPhone,
         customerRoomUnit: saved.customerRoomUnit,
         washingMachine: saved.washingMachine,
-        estimatedFrom: saved.estimatedFrom,
-        estimatedTo: saved.estimatedTo,
+        estimatedFrom: saved.estimatedFrom?.toISOString() || null,
+        estimatedTo: saved.estimatedTo?.toISOString() || null,
         total: saved.total.toString(),
         items: lines.map((i) => ({
           serviceId: i.serviceId, serviceName: i.serviceName,
