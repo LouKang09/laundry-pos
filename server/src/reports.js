@@ -30,10 +30,10 @@ async function report(from, to) {
   const date = { gte: from.toJSDate(), lt: to.toJSDate() };
   const [orders, payments, expenses, completed] = await Promise.all([
     db.order.findMany({
-      where: { createdAt: date, status: { not: "CANCELLED" } },
+      where: { createdAt: date, status: { not: "CANCELLED" }, deletedAt: null },
       include: { items: true, user: { select: { name: true, id: true } } },
     }),
-    db.payment.findMany({ where: { createdAt: date } }),
+    db.payment.findMany({ where: { createdAt: date, order: { deletedAt: null } } }),
     db.expense.findMany({
       where: {
         date: {
@@ -43,7 +43,7 @@ async function report(from, to) {
       },
     }),
     db.orderStatusHistory.findMany({
-      where: { newStatus: "READY", createdAt: date },
+      where: { newStatus: "READY", createdAt: date, order: { deletedAt: null } },
       include: { order: { include: { items: true } } },
     }),
   ]);
@@ -164,8 +164,9 @@ reporting.get("/dashboard", async (req, res) => {
     staff = req.user.role === "LAUNDRY_STAFF",
     isToday = !hasRange && selectedDate === currentDate,
     currentAdminOperations = req.user.role === "ADMIN" && isToday,
-    statusWhere = currentAdminOperations ? {} : { createdAt: selectedRange },
+    statusWhere = { deletedAt: null, ...(currentAdminOperations ? {} : { createdAt: selectedRange }) },
     unpaidWhere = {
+      deletedAt: null,
       paymentStatus: "UNPAID",
       status: { not: "CANCELLED" },
       ...(currentAdminOperations ? {} : { createdAt: selectedRange }),
@@ -185,6 +186,7 @@ reporting.get("/dashboard", async (req, res) => {
     db.order.aggregate({
       where: {
         createdAt: selectedRange,
+        deletedAt: null,
         status: { not: "CANCELLED" },
       },
       _sum: { total: true },
@@ -193,7 +195,7 @@ reporting.get("/dashboard", async (req, res) => {
     currentAdminOperations
       ? db.order.groupBy({ by: ["status"], where: statusWhere, _count: true })
       : Promise.resolve([]),
-    db.order.count({ where: { claimedAt: selectedRange } }),
+    db.order.count({ where: { claimedAt: selectedRange, deletedAt: null } }),
     currentAdminOperations
       ? db.order.count({ where: unpaidWhere })
       : Promise.resolve(0),
@@ -204,7 +206,7 @@ reporting.get("/dashboard", async (req, res) => {
     currentAdminOperations
       ? Promise.resolve([])
       : db.order.findMany({
-          where: { createdAt: selectedRange },
+          where: { createdAt: selectedRange, deletedAt: null },
           select: { id: true },
         }),
   ]);
