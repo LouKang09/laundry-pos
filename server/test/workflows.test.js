@@ -589,9 +589,9 @@ test("24 Admin can edit, audit, and soft-delete a transaction", async () => {
     estimatedTo: null,
     items: [{ serviceId: piece.id, actualQuantity: "2", express: false }],
   }).expect(200);
-  assert.equal(edited.customerName, "Edited " + prefix);
-  assert.equal(edited.total, "360");
-  assert.equal(edited.items[0].actualQuantity, "2");
+  assert.equal(edited.body.customerName, "Edited " + prefix);
+  assert.equal(edited.body.total, "360");
+  assert.equal(edited.body.items[0].actualQuantity, "2");
   const detail = await admin.get("/api/orders/" + created.id).expect(200);
   assert(detail.transactionHistory.some((entry) => entry.action === "TRANSACTION_EDITED"));
   await call(staff, sc, "delete", "/orders/" + created.id).expect(404);
