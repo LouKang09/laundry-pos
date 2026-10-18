@@ -275,6 +275,7 @@ orders.get("/scan/:token", async (req, res) => {
     where: { trackingToken: token },
     select: {
       id: true,
+      deletedAt: true,
       orderNumber: true,
       customerName: true,
       customerRoomUnit: true,
@@ -283,7 +284,7 @@ orders.get("/scan/:token", async (req, res) => {
       paymentStatus: true,
     },
   });
-  if (!o) fail(404, "Order QR was not found");
+  if (!o || o.deletedAt) fail(404, "Order QR was not found");
   const index = workflow.indexOf(o.status),
     nextStatus = index >= 0 && index < workflow.length - 1 ? workflow[index + 1] : null;
   res.json({
@@ -329,11 +330,124 @@ orders.get("/:id", async (req, res) => {
   await audit(db, req.user.id, "ORDER_VIEWED", "Order", o.id);
   res.json({ ...o, statusHistory, notifications, transactionHistory });
 });
+orders.put("/:id", admin, async (req, res) => {
+  const v = z.object({
+    customerName: text,
+    customerPhone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).transform((x) => x.replace(/[ ()-]/g, "")),
+    customerRoomUnit: z.union([z.string().trim().max(80), z.null()]).optional(),
+    washingMachine: z.union([z.string().trim().max(80), z.null()]).optional(),
+    estimatedFrom: z.union([z.iso.datetime(), z.null()]).optional(),
+    estimatedTo: z.union([z.iso.datetime(), z.null()]).optional(),
+    items: z.array(z.object({
+      serviceId: text,
+      actualQuantity: z.union([z.string(), z.number()]).transform(String).refine((x) => /^\d{1,7}(\.\d{1,3})?$/.test(x) && Number(x) > 0, "Enter a valid quantity"),
+      express: z.boolean(),
+    }).strict()).min(1).max(30),
+  }).strict().parse(req.body);
+  if (!!v.estimatedFrom !== !!v.estimatedTo ||
+      (v.estimatedFrom && v.estimatedTo && v.estimatedFrom >= v.estimatedTo))
+    fail(400, "Set a valid pickup window with both start and end");
+  const result = await atomic(async (tx) => {
+    const old = await getOrder(tx, req.params.id);
+    if (old.deletedAt) fail(409, "Deleted transactions cannot be edited");
+    const oldLines = old.items.map((i) => ({
+      serviceId: i.serviceId,
+      actualQuantity: String(i.actualQuantity),
+      express: i.express,
+    }));
+    const normalizedLines = v.items.map((i) => ({
+      serviceId: i.serviceId,
+      actualQuantity: String(i.actualQuantity),
+      express: i.express,
+    }));
+    const sortLines = (items) => items.sort((a, b) =>
+      a.serviceId.localeCompare(b.serviceId) || Number(a.express) - Number(b.express)
+    );
+    const changedLines = JSON.stringify(sortLines([...oldLines])) !== JSON.stringify(sortLines([...normalizedLines]));
+    if (changedLines && (old.status !== "RECEIVED" || old.paymentStatus !== "UNPAID"))
+      fail(409, "Services and quantities can only be changed before processing and payment");
+    let lines = old.items;
+    let total = old.total;
+    if (changedLines) {
+      const priced = [];
+      for (const item of v.items) {
+        priced.push(priceItem(await tx.service.findUnique({ where: { id: item.serviceId } }), item));
+      }
+      total = money(priced.reduce((sum, line) => sum.add(line.total), new D(0)));
+      await tx.orderItem.deleteMany({ where: { orderId: old.id } });
+      await tx.orderItem.createMany({ data: priced.map((line) => ({ ...line, orderId: old.id })) });
+      lines = priced;
+    }
+    const before = {
+      customerName: old.customerName,
+      customerPhone: old.customerPhone,
+      customerRoomUnit: old.customerRoomUnit,
+      washingMachine: old.washingMachine,
+      estimatedFrom: old.estimatedFrom,
+      estimatedTo: old.estimatedTo,
+      total: old.total.toString(),
+      items: old.items.map((i) => ({
+        serviceId: i.serviceId, serviceName: i.serviceName,
+        actualQuantity: i.actualQuantity.toString(), express: i.express, total: i.total.toString(),
+      })),
+    };
+    const saved = await tx.order.update({
+      where: { id: old.id },
+      data: {
+        customerName: v.customerName,
+        customerPhone: v.customerPhone,
+        customerRoomUnit: v.customerRoomUnit ?? null,
+        washingMachine: v.washingMachine ?? null,
+        estimatedFrom: v.estimatedFrom ? new Date(v.estimatedFrom) : null,
+        estimatedTo: v.estimatedTo ? new Date(v.estimatedTo) : null,
+        ...(changedLines ? { total } : {}),
+      },
+      include: orderInclude,
+    });
+    await audit(tx, req.user.id, "TRANSACTION_EDITED", "Order", old.id, {
+      before,
+      after: {
+        customerName: saved.customerName,
+        customerPhone: saved.customerPhone,
+        customerRoomUnit: saved.customerRoomUnit,
+        washingMachine: saved.washingMachine,
+        estimatedFrom: saved.estimatedFrom,
+        estimatedTo: saved.estimatedTo,
+        total: saved.total.toString(),
+        items: lines.map((i) => ({
+          serviceId: i.serviceId, serviceName: i.serviceName,
+          actualQuantity: i.actualQuantity.toString(), express: i.express, total: i.total.toString(),
+        })),
+      },
+    });
+    return getOrder(tx, saved.id);
+  });
+  res.json(result);
+});
+orders.delete("/:id", admin, async (req, res) => {
+  const result = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt) fail(409, "Transaction is already in Deleted");
+    const deletedAt = new Date();
+    await tx.order.update({
+      where: { id: order.id },
+      data: { deletedAt, deletedById: req.user.id },
+    });
+    await audit(tx, req.user.id, "TRANSACTION_DELETED", "Order", order.id, {
+      orderNumber: order.orderNumber,
+      total: order.total.toString(),
+      status: order.status,
+      deletedAt: deletedAt.toISOString(),
+    });
+    res.json({ ok: true, id: order.id, deletedAt });
+  });
+});
 orders.post("/:id/payment", async (req, res) => {
   const payment = paymentSchema.parse(req.body);
   res.json(
     await atomic(async (tx) => {
       const o = await getOrder(tx, req.params.id);
+      if (o.deletedAt) fail(409, "Deleted transactions cannot receive payment");
       await receive(tx, o, req.user.id, payment);
       return getOrder(tx, o.id);
     }),
@@ -351,6 +465,7 @@ orders.post("/:id/status", async (req, res) => {
   res.json(
     await atomic(async (tx) => {
       const o = await getOrder(tx, req.params.id);
+      if (o.deletedAt) fail(409, "Deleted transactions cannot change status");
       let selectedMachine;
       if (status === "CANCELLED") {
         if (req.user.role !== "ADMIN")
@@ -474,6 +589,7 @@ export async function publicTracking(req, res) {
   const o = await db.order.findUnique({
     where: { trackingToken: token },
     select: {
+      deletedAt: true,
       orderNumber: true,
       status: true,
       createdAt: true,
@@ -481,7 +597,7 @@ export async function publicTracking(req, res) {
       estimatedTo: true,
     },
   });
-  if (!o) fail(404, "Tracking record not found");
+  if (!o || o.deletedAt) fail(404, "Tracking record not found");
   const cfg = await business();
   res
     .set("Cache-Control", "no-store")
