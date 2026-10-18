@@ -136,6 +136,8 @@ model Order {
   claimedAt             DateTime?
   cancellationReason    String?
   printCount            Int                    @default(0)
+  deletedAt             DateTime?
+  deletedById           String?
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   items                 OrderItem[]
@@ -145,6 +147,7 @@ model Order {
   inventoryTransactions InventoryTransaction[]
 
   @@index([createdAt])
+  @@index([deletedAt])
   @@index([status, paymentStatus])
   @@index([customerId, createdAt])
 }
