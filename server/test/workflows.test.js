@@ -575,3 +575,46 @@ test("23 first-admin setup rejects missing key and closes after setup", async ()
   if (old === undefined) delete process.env.ADMIN_SETUP_KEY;
   else process.env.ADMIN_SETUP_KEY = old;
 });
+
+
+test("24 Admin can edit, audit, and soft-delete a transaction", async () => {
+  const created = (await call(
+    staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }]),
+  ).expect(201)).body;
+  const edited = await call(admin, ac, "put", "/orders/" + created.id, {
+    customerName: "Edited " + prefix,
+    customerPhone: "09123456789",
+    customerRoomUnit: "Unit 8",
+    washingMachine: "Washer 2",
+    estimatedFrom: null,
+    estimatedTo: null,
+    items: [{ serviceId: piece.id, actualQuantity: "2", express: false }],
+  }).expect(200);
+  assert.equal(edited.customerName, "Edited " + prefix);
+  assert.equal(edited.total, "360");
+  assert.equal(edited.items[0].actualQuantity, "2");
+  const detail = await admin.get("/api/orders/" + created.id).expect(200);
+  assert(detail.transactionHistory.some((entry) => entry.action === "TRANSACTION_EDITED"));
+  await call(staff, sc, "delete", "/orders/" + created.id).expect(404);
+  await call(admin, ac, "delete", "/orders/" + created.id).expect(200);
+  await admin.get("/api/orders?q=" + encodeURIComponent(created.orderNumber) + "&view=customer").expect(200).then((r) => assert.equal(r.body.total, 0));
+  const deleted = await admin.get("/api/orders?q=" + encodeURIComponent(created.orderNumber) + "&view=transactions&deleted=1").expect(200);
+  assert.equal(deleted.body.total, 1);
+  assert.equal(deleted.body.rows[0].id, created.id);
+  await call(admin, ac, "put", "/orders/" + created.id, {
+    customerName: "Again", customerPhone: "09123456789",
+    items: [{ serviceId: piece.id, actualQuantity: "2", express: false }],
+  }).expect(409);
+});
+test("25 Admin can delete a user without a separate history view", async () => {
+  const email = prefix + "-delete-user@example.test";
+  const created = (await call(admin, ac, "post", "/admin/users", {
+    name: "Disposable User", email, password,
+    role: "LAUNDRY_STAFF", active: true,
+  }).expect(201)).body;
+  await call(admin, ac, "delete", "/admin/users/" + created.id).expect(200);
+  const users = await admin.get("/api/admin/users").expect(200);
+  assert.equal(users.find((u) => u.id === created.id).active, false);
+  await admin.get("/api/admin/users/" + created.id + "/history").expect(404);
+});
