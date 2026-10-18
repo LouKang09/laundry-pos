@@ -1815,3 +1815,45 @@ td .actions {
   .pos-receipt-qr{width:35mm!important;height:35mm!important}
   @page{size:auto;margin:3mm}
 }
+
+
+/* Transaction editing and audit history */
+.edit-line {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(100px, 1fr) minmax(130px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface, #fbfcfd);
+}
+.history-json {
+  max-width: 100%;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface, #f7f9fb);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.72rem;
+}
+.history-item details {
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+.history-item summary {
+  cursor: pointer;
+  color: var(--teal);
+}
+@media (max-width: 700px) {
+  .edit-line {
+    grid-template-columns: 1fr 1fr;
+  }
+  .edit-line .field:first-child {
+    grid-column: 1 / -1;
+  }
+}
