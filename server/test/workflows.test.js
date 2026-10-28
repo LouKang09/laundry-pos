@@ -683,3 +683,66 @@ test("28 admin edit preserves separately recorded matching loads", async () => {
   const history = (await admin.get("/api/orders/" + created.id).expect(200)).body.transactionHistory;
   assert(history.some((entry) => entry.action === "TRANSACTION_EDITED"));
 });
+
+test("29 custom tier sizing, CAPS add-ons, locked order prices and historical stock isolation", async () => {
+  const capsService = (await call(admin, ac, "post", "/admin/services", {
+    name: prefix + " Cap service", unit: "CAPS",
+    regularFullPrice: "40", regularFullQuantity: "5",
+    regularHalfPrice: "10", regularHalfQuantity: "1",
+    expressFullPrice: "60", expressFullQuantity: "5",
+    expressHalfPrice: "15", expressHalfQuantity: "1",
+    pricingTiers: [
+      { label: "Five caps", quantity: "5", regularPrice: "40", expressPrice: "60" },
+      { label: "One cap", quantity: "1", regularPrice: "10", expressPrice: "15" },
+    ], active: true,
+  }).expect(201)).body;
+  const tierResult = priceItem(capsService, {
+    serviceId: capsService.id, actualQuantity: "6", express: false,
+  });
+  assert.equal(tierResult.total.toString(), "50");
+  assert.match(tierResult.pricingLabel, /Five caps/);
+  await call(staff, sc, "post", "/admin/inventory", {
+    name: prefix + " Not allowed", unit: "CAPS", lowStockThreshold: "0",
+    salePrice: "5", sellAsAddon: true, active: true,
+  }).expect(403);
+  const additive = (await call(admin, ac, "post", "/admin/inventory", {
+    name: prefix + " Fabcon", unit: "CAPS", lowStockThreshold: "0",
+    salePrice: "9.50", sellAsAddon: true, active: true,
+  }).expect(201)).body;
+  await call(admin, ac, "post", "/admin/inventory/" + additive.id + "/movement", {
+    type: "REPLENISHMENT", quantity: "10", reason: "Stock for add-on test",
+  }).expect(200);
+  const choices = (await staff.get("/api/addons").expect(200)).body;
+  assert(choices.some(row => row.id === additive.id && row.salePrice === "9.5"));
+  const pricedService = priceItem(capsService, {
+    serviceId: capsService.id, actualQuantity: "6", express: false,
+  });
+  const payload = {
+    ...orderBody([{ serviceId: capsService.id, actualQuantity: "6", express: false }]),
+    addons: [{ inventoryItemId: additive.id, quantity: "2" }],
+  };
+  const created = (await call(staff, sc, "post", "/orders", payload).expect(201)).body;
+  assert.equal(created.total, new D(pricedService.total).add("19").toString());
+  assert.equal(created.addons.length, 1);
+  assert.equal(created.addons[0].name, additive.name);
+  assert.equal(created.addons[0].unitPrice, "9.5");
+  assert.equal(created.addons[0].total, "19");
+  assert.equal((await db.inventoryItem.findUnique({ where: { id: additive.id } })).stock.toString(), "8");
+  await call(staff, sc, "post", "/orders", payload).expect(201);
+  assert.equal((await db.inventoryItem.findUnique({ where: { id: additive.id } })).stock.toString(), "8");
+  await call(admin, ac, "put", "/admin/inventory/" + additive.id, {
+    name: additive.name, unit: "CAPS", lowStockThreshold: "0",
+    salePrice: "12", sellAsAddon: true, active: true,
+  }).expect(200);
+  const original = (await admin.get("/api/orders/" + created.id).expect(200)).body;
+  assert.equal(original.addons[0].unitPrice, "9.5");
+  const historicalDate = DateTime.now().setZone("Asia/Manila").minus({ days: 3 }).toISODate();
+  const historic = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate, customerId: customer.id,
+    status: "CLAIMED", items: [{ serviceId: capsService.id, actualQuantity: "1", express: false }],
+    addons: [{ inventoryItemId: additive.id, quantity: "2" }], payment: { method: "CASH" },
+  }).expect(201)).body;
+  assert.equal(historic.addons[0].unitPrice, "12");
+  assert.equal(historic.total, "34");
+  assert.equal((await db.inventoryItem.findUnique({ where: { id: additive.id } })).stock.toString(), "8");
+});
