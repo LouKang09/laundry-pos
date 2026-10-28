@@ -209,3 +209,10 @@ server/start-production.sh
 ## Future extensions
 
 SMS provider delivery, online payment-gateway verification, paid-order refunds/voids, camera-based staff scanning, multi-branch operations, offline sales and shared rate limiting for multiple replicas. These are not required for the current single-shop workflow; no unimplemented controls pretend to provide them.
+
+
+## Separate loads per transaction
+
+The live POS and Admin Manual Add allow multiple independent loads of the same service and speed within one transaction. Select the service again or use **Add another load** on an existing line; each load has its own actual quantity, speed and server-calculated full/half-load price. For example, Wash & Fold 5 kg and Wash & Fold 3 kg are stored as two separate order items, not one 8 kg item. This also applies to piece-based services such as comforters and dry cleaning. Up to 30 loads may be saved in one order.
+
+The breakdown remains available in order details, transaction editing and two-copy receipts. Admin edits to load quantities remain restricted to Received + Unpaid transactions. The same responsive POS screen serves desktop and mobile browsers; this repository does not contain a separate Android native client.
