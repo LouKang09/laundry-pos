@@ -30,9 +30,9 @@ function ReceiptCopy({ data: order, copy }) {
         {date(order.createdAt)}
       </p>
       <hr />
-      {order.items.map((item) => (
+      {order.items.map((item, index) => (
         <div className="pos-receipt-line" key={item.id}>
-          <strong>{item.serviceName} · {item.express ? "Express" : "Regular"}</strong>
+          <strong>Load {index + 1} · {item.serviceName} · {item.express ? "Express" : "Regular"}</strong>
           <p>
             Actual: {item.actualQuantity} {item.unit}
             <br />
