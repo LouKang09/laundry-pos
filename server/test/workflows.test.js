@@ -616,3 +616,62 @@ test("25 Admin can delete a user without a separate history view", async () => {
   assert.equal(users.body.find((u) => u.id === created.id).active, false);
   await admin.get("/api/admin/users/" + created.id + "/history").expect(404);
 });
+
+
+test("26 live POS retains separate KG and piece loads with independent pricing", async () => {
+  const items = [
+    { serviceId: kg.id, actualQuantity: "5", express: false },
+    { serviceId: kg.id, actualQuantity: "3", express: false },
+    { serviceId: piece.id, actualQuantity: "1", express: false },
+    { serviceId: piece.id, actualQuantity: "1", express: false },
+  ];
+  const created = (await call(staff, sc, "post", "/orders", orderBody(items)).expect(201)).body;
+  assert.equal(created.items.length, 4);
+  assert.deepEqual(created.items.filter((i) => i.serviceId === kg.id).map((i) => i.actualQuantity).sort(), ["3", "5"]);
+  assert.equal(created.total, "781.58");
+  const detail = (await admin.get("/api/orders/" + created.id).expect(200)).body;
+  assert.equal(detail.items.length, 4);
+  assert.equal(new Set(detail.items.map((i) => i.id)).size, 4);
+  assert.equal(detail.items.filter((i) => i.serviceId === piece.id).length, 2);
+});
+
+test("27 admin historical manual entry keeps repeated service loads", async () => {
+  const historicalDate = DateTime.now().setZone("Asia/Manila").minus({ days: 3 }).toISODate();
+  const created = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate,
+    customerId: customer.id,
+    status: "CLAIMED",
+    payment: { method: "CASH" },
+    items: [
+      { serviceId: kg.id, actualQuantity: "5", express: false },
+      { serviceId: kg.id, actualQuantity: "3", express: false },
+      { serviceId: piece.id, actualQuantity: "1", express: true },
+      { serviceId: piece.id, actualQuantity: "1", express: true },
+    ],
+  }).expect(201)).body;
+  assert.equal(created.items.length, 4);
+  assert.equal(created.total, "921.58");
+  const found = (await admin.get("/api/orders/" + created.id).expect(200)).body;
+  assert.equal(found.items.filter((i) => i.serviceId === kg.id).length, 2);
+  assert.equal(found.items.filter((i) => i.serviceId === piece.id).length, 2);
+});
+
+test("28 admin edit preserves separately recorded matching loads", async () => {
+  const created = (await call(staff, sc, "post", "/orders", orderBody([
+    { serviceId: kg.id, actualQuantity: "5", express: false },
+  ])).expect(201)).body;
+  const edited = (await call(admin, ac, "put", "/orders/" + created.id, {
+    customerName: customer.name,
+    customerPhone: "",
+    items: [
+      { serviceId: kg.id, actualQuantity: "5", express: false },
+      { serviceId: kg.id, actualQuantity: "3", express: false },
+    ],
+  }).expect(200)).body;
+  assert.equal(edited.items.length, 2);
+  assert.equal(edited.total, "421.58");
+  assert.equal(edited.customerPhone, "");
+  const history = (await admin.get("/api/orders/" + created.id).expect(200)).body.transactionHistory;
+  assert(history.some((entry) => entry.action === "TRANSACTION_EDITED"));
+});
