@@ -39,7 +39,7 @@ export const customerSchema = z
 export const serviceSchema = z
   .object({
     name: text,
-    unit: z.enum(["KG", "PIECE"]),
+    unit: z.string().trim().min(1).max(30).regex(/^[A-Za-z][A-Za-z0-9 _/-]*$/, "Enter a valid measurement unit"),
     regularFullPrice: decimal(),
     regularFullQuantity: decimal(3),
     regularHalfPrice: decimal(),
@@ -48,6 +48,12 @@ export const serviceSchema = z
     expressFullQuantity: decimal(3),
     expressHalfPrice: decimal(),
     expressHalfQuantity: decimal(3),
+    pricingTiers: z.array(z.object({
+      label: z.string().trim().min(1).max(60),
+      quantity: decimal(3),
+      regularPrice: decimal(),
+      expressPrice: decimal(),
+    }).strict()).min(1).max(20).optional(),
     active: z.boolean().default(true),
   })
   .strict()
@@ -67,15 +73,26 @@ export const serviceSchema = z
   )
   .refine(
     (v) =>
-      v.unit !== "PIECE" ||
+      !["PIECE", "PCS", "CAPS"].includes(v.unit.toUpperCase()) ||
       [
         v.regularFullQuantity,
         v.regularHalfQuantity,
         v.expressFullQuantity,
         v.expressHalfQuantity,
       ].every((quantity) => Number.isInteger(Number(quantity))),
-    { message: "Piece load quantities must be whole numbers" },
-  );
+    { message: "Count-based load quantities must be whole numbers" },
+  )
+  .refine((v) => !v.pricingTiers ||
+    new Set(v.pricingTiers.map((t) => Number(t.quantity))).size === v.pricingTiers.length,
+    { message: "Pricing tiers must have unique capacities", path: ["pricingTiers"] })
+  .refine((v) => !v.pricingTiers || !["PIECE", "PCS", "CAPS"].includes(v.unit.toUpperCase()) ||
+    v.pricingTiers.every((t) => Number.isInteger(Number(t.quantity))),
+    { message: "Count-based pricing tiers need whole-number capacities", path: ["pricingTiers"] });
+
+export const addonSchema = z.array(z.object({
+  inventoryItemId: text,
+  quantity: decimal(3),
+}).strict()).max(30).default([]);
 
 export const paymentSchema = z
   .object({
@@ -110,6 +127,7 @@ export const orderSchema = z
       )
       .min(1)
       .max(30),
+    addons: addonSchema,
     payment: paymentSchema.optional(),
     estimatedFrom: z.iso.datetime().optional(),
     estimatedTo: z.iso.datetime().optional(),

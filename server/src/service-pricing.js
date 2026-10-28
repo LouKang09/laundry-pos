@@ -7,14 +7,20 @@ export const servicePricing = Router();
 servicePricing.use(admin);
 
 function legacyFields(value) {
+  const tiers = value.pricingTiers?.length
+    ? [...value.pricingTiers].sort((a,b) => Number(b.quantity) - Number(a.quantity)) : null;
+  const full = tiers?.[0], half = tiers?.[1] || full;
+  const legacy = full ? {
+    regularFullPrice: full.regularPrice, regularFullQuantity: full.quantity,
+    regularHalfPrice: half.regularPrice, regularHalfQuantity: half.quantity,
+    expressFullPrice: full.expressPrice, expressFullQuantity: full.quantity,
+    expressHalfPrice: half.expressPrice, expressHalfQuantity: half.quantity,
+  } : value;
   return {
-    regularPrice: money(
-      new D(value.regularFullPrice).div(value.regularFullQuantity),
-    ).toString(),
-    expressPrice: money(
-      new D(value.expressFullPrice).div(value.expressFullQuantity),
-    ).toString(),
-    minimumQuantity: value.regularFullQuantity,
+    ...(full ? legacy : {}),
+    regularPrice: money(new D(legacy.regularFullPrice).div(legacy.regularFullQuantity)).toString(),
+    expressPrice: money(new D(legacy.expressFullPrice).div(legacy.expressFullQuantity)).toString(),
+    minimumQuantity: legacy.regularFullQuantity,
   };
 }
 
