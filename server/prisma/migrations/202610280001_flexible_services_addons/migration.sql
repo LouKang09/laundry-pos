@@ -1,6 +1,13 @@
 -- Retain historic unit values and prices; add configurable tiers and retail add-ons.
+ALTER TABLE "Service" DROP CONSTRAINT "Service_whole_piece_minimum";
+ALTER TABLE "OrderItem" DROP CONSTRAINT "OrderItem_whole_pieces";
 ALTER TABLE "Service" ALTER COLUMN "unit" TYPE TEXT USING "unit"::text;
 ALTER TABLE "OrderItem" ALTER COLUMN "unit" TYPE TEXT USING "unit"::text;
+ALTER TABLE "Service" ADD CONSTRAINT "Service_whole_piece_minimum"
+  CHECK (UPPER("unit") NOT IN ('PIECE','PCS','CAPS') OR "minimumQuantity" = trunc("minimumQuantity"));
+ALTER TABLE "OrderItem" ADD CONSTRAINT "OrderItem_whole_pieces"
+  CHECK (UPPER("unit") NOT IN ('PIECE','PCS','CAPS') OR
+    ("actualQuantity" = trunc("actualQuantity") AND "billableQuantity" = trunc("billableQuantity")));
 ALTER TABLE "Service" ADD COLUMN "pricingTiers" JSONB;
 ALTER TABLE "InventoryItem" ADD COLUMN "salePrice" DECIMAL(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE "InventoryItem" ADD COLUMN "sellAsAddon" BOOLEAN NOT NULL DEFAULT false;
