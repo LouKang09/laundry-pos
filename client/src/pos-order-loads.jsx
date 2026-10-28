@@ -182,7 +182,7 @@ export function PosOrder() {
                     </button>
                   </div>
                   <div className="line-inputs">
-                    <Field label={"Actual " + (line.service?.unit || "units")}>
+                    <Field label={"Actual " + (line.service?.unit === "KG" ? "kg" : (line.service?.unit?.toLowerCase() || "units"))}>
                       <input
                         type="number"
                         min={line.service?.unit === "KG" ? "0.001" : "1"}
