@@ -787,11 +787,11 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
               ))}
             </div>
             <Table headers={["Service", "Actual", "Billable", "Rate", "Total"]}>
-              {o.items.map((i) => (
+              {o.items.map((i, index) => (
                 <tr key={i.id}>
                   <td>
-                    {i.serviceName}
-                    <small>{i.express ? "Express" : "Regular"}</small>
+                    Load {index + 1} · {i.serviceName}
+                    <small>{i.express ? "Express" : "Regular"} · Individual load</small>
                   </td>
                   <td>
                     {i.actualQuantity} {i.unit}
@@ -1120,7 +1120,7 @@ function TransactionEditor({ order, onClose, onSaved }) {
         <ErrorBox message={error || servicesError} />
         <div className="form-grid">
           <Field label="Customer name" value={form.customerName} onChange={(e) => setField("customerName", e.target.value)} required maxLength={160} />
-          <Field label="Phone number" value={form.customerPhone} onChange={(e) => setField("customerPhone", e.target.value)} required maxLength={20} />
+          <Field label="Phone number" value={form.customerPhone} onChange={(e) => setField("customerPhone", e.target.value)} maxLength={20} />
           <Field label="Room / Unit" value={form.customerRoomUnit} onChange={(e) => setField("customerRoomUnit", e.target.value)} maxLength={80} />
           <Field label="Washing machine" value={form.washingMachine} onChange={(e) => setField("washingMachine", e.target.value)} maxLength={80} />
           <Field label="Estimated pickup from" type="datetime-local" value={form.estimatedFrom} onChange={(e) => setField("estimatedFrom", e.target.value)} />
@@ -1130,13 +1130,14 @@ function TransactionEditor({ order, onClose, onSaved }) {
         {!canEditLines && <p className="muted small">Customer and pickup details can still be edited. Service quantities and total are locked to protect paid totals and inventory history.</p>}
         {form.items.map((item, index) => (
           <div className="edit-line" key={index}>
-            <label className="field"><span>Service</span><select disabled={!canEditLines} value={item.serviceId} onChange={(e) => setLine(index, "serviceId", e.target.value)}>{(services || []).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+            <label className="field"><span>Load {index + 1} · Service</span><select disabled={!canEditLines} value={item.serviceId} onChange={(e) => setLine(index, "serviceId", e.target.value)}>{(services || []).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <Field label="Quantity" type="number" min="0.001" step="0.001" value={item.actualQuantity} disabled={!canEditLines} onChange={(e) => setLine(index, "actualQuantity", e.target.value)} required />
             <label className="field"><span>Speed</span><select disabled={!canEditLines} value={item.express ? "EXPRESS" : "REGULAR"} onChange={(e) => setLine(index, "express", e.target.value === "EXPRESS")}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></label>
-            {canEditLines && <button type="button" className="icon" aria-label="Remove service" disabled={form.items.length <= 1} onClick={() => setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }))}><Trash2 size={17} /></button>}
+            {canEditLines && <button type="button" className="icon" aria-label={"Remove load " + (index + 1)} disabled={form.items.length <= 1} onClick={() => setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }))}><Trash2 size={17} /></button>}
+            {canEditLines && <button type="button" className="secondary" disabled={form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: item.serviceId, actualQuantity: "1", express: item.express }] }))}><Plus size={16} /> Another load</button>
           </div>
         ))}
-        {canEditLines && <button type="button" className="secondary" disabled={!services?.length} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: services[0].id, actualQuantity: "1", express: false }] }))}><Plus size={16} /> Add service</button>}
+        {canEditLines && <button type="button" className="secondary" disabled={!services?.length || form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: services[0].id, actualQuantity: "1", express: false }] }))}><Plus size={16} /> Add load</button>}
         <div className="actions"><button type="button" className="secondary" onClick={onClose}>Cancel</button><SaveButton busy={busy}>Save transaction</SaveButton></div>
       </form>
     </Modal>
