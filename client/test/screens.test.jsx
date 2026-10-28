@@ -10,6 +10,8 @@ import {Context} from '../src/context';
 import {setCsrf} from '../src/api';
 import {Customers} from '../src/operations';
 import {Dashboard,NewOrder,OrderList} from '../src/workflow';
+import {PosOrder} from '../src/pos-order-loads';
+import {AdminHistoricalOrder} from '../src/admin-historical-load-order';
 import {Services,Inventory,Expenses,BusinessSettings} from '../src/management';
 import {Reports} from '../src/reporting-page';
 import {UserManagement,Logs} from '../src/admin-pages';
@@ -71,4 +73,32 @@ for(const [name,element,marker] of screens)test(name+' screen renders live API d
  await waitFor(()=>expect(screen.queryByText('Loading…')).toBeNull());
  expect((await screen.findAllByText(marker)).length).toBeGreaterThan(0);
  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+
+test('live POS keeps repeated service clicks as two editable loads', async () => {
+  const ui = userEvent.setup();
+  mount(<PosOrder />, staffUser, false);
+  const service = await screen.findByRole('button', {name: /Wash & Fold/});
+  await ui.click(service);
+  await ui.click(service);
+  expect(screen.getAllByLabelText('Actual kg')).toHaveLength(2);
+  expect(screen.getByText(/Load 1 · Wash & Fold/)).toBeTruthy();
+  expect(screen.getByText(/Load 2 · Wash & Fold/)).toBeTruthy();
+  await ui.clear(screen.getAllByLabelText('Actual kg')[0]);
+  await ui.type(screen.getAllByLabelText('Actual kg')[0], '5');
+  await ui.clear(screen.getAllByLabelText('Actual kg')[1]);
+  await ui.type(screen.getAllByLabelText('Actual kg')[1], '3');
+  expect(screen.getAllByLabelText('Actual kg').map((input) => input.value)).toEqual(['5', '3']);
+});
+
+test('admin manual add allows multiple separate loads for the same service', async () => {
+  const ui = userEvent.setup();
+  mount(<AdminHistoricalOrder />);
+  const service = await screen.findByRole('button', {name: /Wash & Fold/});
+  await ui.click(service);
+  expect(screen.getAllByLabelText('Actual kg')).toHaveLength(1);
+  await ui.click(screen.getByRole('button', {name: 'Add another load'}));
+  expect(screen.getAllByLabelText('Actual kg')).toHaveLength(2);
+  expect(screen.getByText(/Load 2 · Wash & Fold/)).toBeTruthy();
 });
