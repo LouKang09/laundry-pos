@@ -151,7 +151,7 @@ const inventorySchema = z
     name: text,
     unit: z.string().trim().min(1).max(30),
     lowStockThreshold: decimal(3, true),
-    salePrice: decimal(2, true),
+    salePrice: decimal(2, true).default("0"),
     sellAsAddon: z.boolean().default(false),
     active: z.boolean().default(true),
   })
