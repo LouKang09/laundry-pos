@@ -16,6 +16,7 @@ import {
   useData,
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
+import { AddonsPicker } from "./addons-picker";
 import { PaymentMethodPicker, paymentPayload } from "./payment-flow";
 
 const previousBusinessDay = () =>
@@ -28,10 +29,12 @@ const stages = ["RECEIVED", "WASHING", "DRYING", "FOLDING", "READY", "CLAIMED"];
 export function AdminHistoricalOrder() {
   const { notify } = useApp();
   const { data: services, error: serviceError } = useData("/services");
+  const { data: addonCatalog, error: addonError } = useData("/addons");
   const [q, setQ] = useState(""),
     [customer, setCustomer] = useState(null),
     [newCustomer, setNewCustomer] = useState(false),
     [lines, setLines] = useState([]),
+    [addons, setAddons] = useState([]),
     [express, setExpress] = useState(false),
     [historicalDate, setHistoricalDate] = useState(previousBusinessDay()),
     [status, setStatus] = useState("CLAIMED"),
@@ -58,7 +61,10 @@ export function AdminHistoricalOrder() {
   const total = priced.reduce(
     (sum, line) => sum.add(line.pricing.total),
     new Decimal(0),
-  );
+  ).add(addons.reduce((sum,row)=>{
+    const item=addonCatalog?.find(x=>x.id===row.inventoryItemId);
+    return sum.add(new Decimal(item?.salePrice||0).mul(row.quantity||0));
+  },new Decimal(0)));
   const claimedWithoutPayment = status === "CLAIMED" && payment === "UNPAID";
 
   // One service may have multiple independent loads; never merge them silently.
@@ -98,7 +104,7 @@ export function AdminHistoricalOrder() {
           They do not deduct today&apos;s inventory.
         </p>
       </section>
-      <ErrorBox message={error || serviceError || customerError} />
+      <ErrorBox message={error || serviceError || addonError || customerError} />
 
       <div className="pos-grid">
         <div className="pos-left">
@@ -183,7 +189,7 @@ export function AdminHistoricalOrder() {
                     <button className="icon" aria-label="Remove service" onClick={() => setLines(lines.filter((_, i) => i !== index))}><Trash2 size={17} /></button>
                   </div>
                   <div className="line-inputs">
-                    <Field label={"Actual " + (line.service?.unit === "KG" ? "kg" : "pieces")}>
+                    <Field label={"Actual " + (line.service?.unit || "units")}>
                       <input
                         type="number"
                         min={line.service?.unit === "KG" ? "0.001" : "1"}
@@ -214,6 +220,8 @@ export function AdminHistoricalOrder() {
             ) : <Empty>Select services for the historical transaction.</Empty>}
           </div>
 
+          <AddonsPicker catalog={addonCatalog || []} value={addons} onChange={setAddons} historical/>
+
           <Field label="Washing machine / machine number (optional)">
             <input
               value={washingMachine}
@@ -227,7 +235,7 @@ export function AdminHistoricalOrder() {
             <div className="section-title">
               <div>
                 <h3>Payment</h3>
-                <span className="muted">Water POS-style payment selection</span>
+                <span className="muted">Cash, GCash, or pay at pickup</span>
               </div>
             </div>
             {status === "CLAIMED" && (
@@ -271,10 +279,12 @@ export function AdminHistoricalOrder() {
                   status,
                   washingMachine: washingMachine.trim() || undefined,
                   items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
+                  addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
                   ...(paymentPayload(payment, reference, receiptDataUrl) ? { payment: paymentPayload(payment, reference, receiptDataUrl) } : {}),
                 });
                 setSaved(order);
                 setLines([]);
+                setAddons([]);
                 setCustomer(null);
                 setStatus("CLAIMED");
                 setPayment("CASH");

@@ -16,16 +16,19 @@ import {
   useData,
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
+import { AddonsPicker } from "./addons-picker";
 import { PaymentDialog, paymentPayload } from "./payment-flow";
 import { PosReceiptPrint } from "./pos-receipt-print";
 
 export function PosOrder() {
   const { notify } = useApp();
   const { data: services, error: serviceError } = useData("/services");
+  const { data: addonCatalog, error: addonError } = useData("/addons");
   const [q, setQ] = useState(""),
     [customer, setCustomer] = useState(null),
     [newCustomer, setNewCustomer] = useState(false),
     [lines, setLines] = useState([]),
+    [addons, setAddons] = useState([]),
     [express, setExpress] = useState(false),
     [payment, setPayment] = useState("UNPAID"),
     [reference, setReference] = useState(""),
@@ -55,7 +58,10 @@ export function PosOrder() {
   const total = priced.reduce(
     (sum, line) => sum.add(line.pricing.total),
     new Decimal(0),
-  );
+  ).add(addons.reduce((sum,row)=>{
+    const item=addonCatalog?.find(x=>x.id===row.inventoryItemId);
+    return sum.add(new Decimal(item?.salePrice||0).mul(row.quantity||0));
+  },new Decimal(0)));
 
   async function preparePrint(order) {
     setPrintBusy(true);
@@ -100,7 +106,7 @@ export function PosOrder() {
       <PageHead title="New order" eyebrow="POINT OF SALE · LOAD PRICING">
         <span className="muted">Each load is saved and priced separately. Tap a service again or use Add another load.</span>
       </PageHead>
-      <ErrorBox message={error || serviceError || customerError} />
+      <ErrorBox message={error || serviceError || addonError || customerError} />
       <div className="pos-grid">
         <div className="pos-left">
           <section className="panel">
@@ -176,7 +182,7 @@ export function PosOrder() {
                     </button>
                   </div>
                   <div className="line-inputs">
-                    <Field label={"Actual " + (line.service?.unit === "KG" ? "kg" : "pieces")}>
+                    <Field label={"Actual " + (line.service?.unit || "units")}>
                       <input
                         type="number"
                         min={line.service?.unit === "KG" ? "0.001" : "1"}
@@ -210,6 +216,8 @@ export function PosOrder() {
               <Empty>Select a service to start the order.</Empty>
             )}
           </div>
+
+          <AddonsPicker catalog={addonCatalog || []} value={addons} onChange={setAddons}/>
 
           <Field label="Washing machine / machine number (optional)">
             <input
@@ -288,6 +296,7 @@ export function PosOrder() {
               requestKey,
               customerId: customer.id,
               items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
+              addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
               washingMachine: washingMachine.trim() || undefined,
               ...(selectedPayment ? { payment: selectedPayment } : {}),
               ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
@@ -295,6 +304,7 @@ export function PosOrder() {
             });
             setPaymentOpen(false);
             setLines([]);
+            setAddons([]);
             setCustomer(null);
             setPayment("UNPAID");
             setReference("");

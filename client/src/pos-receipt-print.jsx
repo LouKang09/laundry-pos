@@ -49,6 +49,14 @@ function ReceiptCopy({ data: order, copy }) {
           </p>
         </div>
       ))}
+      {!!order.addons?.length && <>
+        <h4>Additional products</h4>
+        {order.addons.map(addon=><div className="pos-receipt-line" key={addon.id}>
+          <strong>{addon.name}</strong>
+          <p>{addon.quantity} {addon.unit} × {cash(addon.unitPrice)}
+            <b className="pos-receipt-amount">{cash(addon.total)}</b></p>
+        </div>)}
+      </>}
       <hr />
       <h3 className="pos-receipt-total">
         <span>Total due</span><span>{cash(order.total)}</span>
