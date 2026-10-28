@@ -134,6 +134,13 @@ app.get("/api/services", async (req, res) =>
     }),
   ),
 );
+app.get("/api/addons", async (req, res) =>
+  res.json(await db.inventoryItem.findMany({
+    where: { active: true, sellAsAddon: true, salePrice: { gt: 0 } },
+    select: { id: true, name: true, unit: true, stock: true, salePrice: true },
+    orderBy: { name: "asc" },
+  })),
+);
 app.get("/api/customers", async (req, res) => {
   const q = z
       .string()

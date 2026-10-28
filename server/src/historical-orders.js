@@ -5,7 +5,8 @@ import { atomic, audit, db, D, fail, money } from "./db.js";
 import { admin } from "./auth.js";
 import { business, orderInclude } from "./orders.js";
 import { priceItem, workflow } from "./pricing.js";
-import { z, decimal, paymentSchema, text } from "./validation.js";
+import { priceAddons } from "./addons.js";
+import { z, decimal, paymentSchema, addonSchema, text } from "./validation.js";
 import { decodePaymentReceipt } from "./payment-receipt.js";
 
 export const historicalOrders = Router();
@@ -29,6 +30,7 @@ const historicalOrderSchema = z
       )
       .min(1)
       .max(30),
+    addons: addonSchema,
     payment: paymentSchema.optional(),
   })
   .strict()
@@ -67,7 +69,8 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       });
       lines.push(priceItem(service, item));
     }
-    const total = money(lines.reduce((sum, l) => sum.add(l.total), new D(0)));
+    const addons = await priceAddons(tx, data.addons, true);
+    const total = money([...lines, ...addons].reduce((sum, l) => sum.add(l.total), new D(0)));
     if (total.gt("9999999999.99"))
       fail(400, "Order total exceeds the supported limit");
 
@@ -116,6 +119,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
             : null,
         createdAt: historicalAt.toJSDate(),
         items: { create: lines },
+        addons: { create: addons },
         statusHistory: { create: history },
         ...(data.payment
           ? {

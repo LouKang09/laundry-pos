@@ -10,12 +10,14 @@ import {
   paymentSchema,
 } from "./validation.js";
 import { priceItem, workflow } from "./pricing.js";
+import { priceAddons, consumeAddons } from "./addons.js";
 import { admin } from "./auth.js";
 import { decodePaymentReceipt } from "./payment-receipt.js";
 import { DateTime } from "luxon";
 export const orders = Router();
 export const orderInclude = {
   items: { orderBy: { id: "asc" } },
+  addons: { orderBy: { id: "asc" } },
   payment: {
     select: {
       id: true,
@@ -130,7 +132,8 @@ orders.post("/", async (req, res) => {
           item,
         ),
       );
-    const total = money(lines.reduce((sum, l) => sum.add(l.total), new D(0)));
+    const addons = await priceAddons(tx, data.addons);
+    const total = money([...lines, ...addons].reduce((sum, l) => sum.add(l.total), new D(0)));
     if (total.gt("9999999999.99"))
       fail(400, "Order total exceeds the supported limit");
     const config = await business(tx),
@@ -164,12 +167,14 @@ orders.post("/", async (req, res) => {
         estimatedFrom: from,
         estimatedTo: to,
         items: { create: lines },
+        addons: { create: addons },
         statusHistory: {
           create: { newStatus: "RECEIVED", userId: req.user.id },
         },
       },
       include: orderInclude,
     });
+    await consumeAddons(tx, addons, o, req.user.id);
     await audit(tx, req.user.id, "ORDER_CREATED", "Order", o.id, {
       orderNumber,
       total: total.toString(),
@@ -375,7 +380,7 @@ orders.put("/:id", admin, async (req, res) => {
       for (const item of v.items) {
         priced.push(priceItem(await tx.service.findUnique({ where: { id: item.serviceId } }), item));
       }
-      total = money(priced.reduce((sum, line) => sum.add(line.total), new D(0)));
+      total = money([...priced, ...old.addons].reduce((sum, line) => sum.add(line.total), new D(0)));
       await tx.orderItem.deleteMany({ where: { orderId: old.id } });
       await tx.orderItem.createMany({ data: priced.map((line) => ({ ...line, orderId: old.id })) });
       lines = priced;
