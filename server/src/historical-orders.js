@@ -32,12 +32,6 @@ const historicalOrderSchema = z
     payment: paymentSchema.optional(),
   })
   .strict()
-  .refine(
-    (v) =>
-      new Set(v.items.map((i) => i.serviceId + ":" + i.express)).size ===
-      v.items.length,
-    { message: "Combine duplicate service/speed lines before saving" },
-  )
   .refine((v) => v.status !== "CLAIMED" || !!v.payment, {
     message: "A claimed historical transaction must include payment",
     path: ["payment"],
