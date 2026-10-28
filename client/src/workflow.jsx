@@ -946,9 +946,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
                     {o.washingMachine && <small>Machine: {o.washingMachine}</small>}
                   </td>
                   <td>
-                    {o.items.map((i) => (
+                    {o.items.map((i, index) => (
                       <div key={i.id}>
-                        {i.serviceName}
+                        Load {index + 1} · {i.serviceName}
                         <small>
                           {i.actualQuantity} → {i.billableQuantity} {i.unit} · {i.express ? "Express" : "Regular"}
                         </small>
