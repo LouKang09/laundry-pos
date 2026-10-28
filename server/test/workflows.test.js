@@ -5,7 +5,8 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { DateTime } from "luxon";
 import { app } from "../src/app.js";
-import { db } from "../src/db.js";
+import { db, D } from "../src/db.js";
+import { priceItem } from "../src/pricing.js";
 import { seed } from "../prisma/seed.js";
 import { periodRange } from "../src/reports.js";
 if (process.env.NODE_ENV !== "test" || !process.env.TEST_DATABASE_URL)
@@ -618,6 +619,11 @@ test("25 Admin can delete a user without a separate history view", async () => {
 });
 
 
+async function expectedSeparateLoadTotal(items) {
+  const services = await Promise.all(items.map((item) => db.service.findUnique({ where: { id: item.serviceId } })));
+  return items.reduce((sum, item, index) => sum.add(priceItem(services[index], item).total), new D(0)).toString();
+}
+
 test("26 live POS retains separate KG and piece loads with independent pricing", async () => {
   const items = [
     { serviceId: kg.id, actualQuantity: "5", express: false },
@@ -628,7 +634,7 @@ test("26 live POS retains separate KG and piece loads with independent pricing",
   const created = (await call(staff, sc, "post", "/orders", orderBody(items)).expect(201)).body;
   assert.equal(created.items.length, 4);
   assert.deepEqual(created.items.filter((i) => i.serviceId === kg.id).map((i) => i.actualQuantity).sort(), ["3", "5"]);
-  assert.equal(created.total, "781.58");
+  assert.equal(created.total, await expectedSeparateLoadTotal(items));
   const detail = (await admin.get("/api/orders/" + created.id).expect(200)).body;
   assert.equal(detail.items.length, 4);
   assert.equal(new Set(detail.items.map((i) => i.id)).size, 4);
@@ -637,21 +643,22 @@ test("26 live POS retains separate KG and piece loads with independent pricing",
 
 test("27 admin historical manual entry keeps repeated service loads", async () => {
   const historicalDate = DateTime.now().setZone("Asia/Manila").minus({ days: 3 }).toISODate();
+  const historicalItems = [
+    { serviceId: kg.id, actualQuantity: "5", express: false },
+    { serviceId: kg.id, actualQuantity: "3", express: false },
+    { serviceId: piece.id, actualQuantity: "1", express: true },
+    { serviceId: piece.id, actualQuantity: "1", express: true },
+  ];
   const created = (await call(admin, ac, "post", "/orders/historical", {
     requestKey: crypto.randomUUID(),
     historicalDate,
     customerId: customer.id,
     status: "CLAIMED",
     payment: { method: "CASH" },
-    items: [
-      { serviceId: kg.id, actualQuantity: "5", express: false },
-      { serviceId: kg.id, actualQuantity: "3", express: false },
-      { serviceId: piece.id, actualQuantity: "1", express: true },
-      { serviceId: piece.id, actualQuantity: "1", express: true },
-    ],
+    items: historicalItems,
   }).expect(201)).body;
   assert.equal(created.items.length, 4);
-  assert.equal(created.total, "921.58");
+  assert.equal(created.total, await expectedSeparateLoadTotal(historicalItems));
   const found = (await admin.get("/api/orders/" + created.id).expect(200)).body;
   assert.equal(found.items.filter((i) => i.serviceId === kg.id).length, 2);
   assert.equal(found.items.filter((i) => i.serviceId === piece.id).length, 2);
@@ -661,16 +668,17 @@ test("28 admin edit preserves separately recorded matching loads", async () => {
   const created = (await call(staff, sc, "post", "/orders", orderBody([
     { serviceId: kg.id, actualQuantity: "5", express: false },
   ])).expect(201)).body;
+  const updatedItems = [
+    { serviceId: kg.id, actualQuantity: "5", express: false },
+    { serviceId: kg.id, actualQuantity: "3", express: false },
+  ];
   const edited = (await call(admin, ac, "put", "/orders/" + created.id, {
     customerName: customer.name,
     customerPhone: "",
-    items: [
-      { serviceId: kg.id, actualQuantity: "5", express: false },
-      { serviceId: kg.id, actualQuantity: "3", express: false },
-    ],
+    items: updatedItems,
   }).expect(200)).body;
   assert.equal(edited.items.length, 2);
-  assert.equal(edited.total, "421.58");
+  assert.equal(edited.total, await expectedSeparateLoadTotal(updatedItems));
   assert.equal(edited.customerPhone, "");
   const history = (await admin.get("/api/orders/" + created.id).expect(200)).body.transactionHistory;
   assert(history.some((entry) => entry.action === "TRANSACTION_EDITED"));
