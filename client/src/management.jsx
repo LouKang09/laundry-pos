@@ -91,6 +91,7 @@ function Editor({ title, fields, initial = {}, onClose, onSave, note }) {
                   min={f.min}
                   max={f.max}
                   step={f.step}
+                  list={f.name === "unit" ? "inventory-unit-suggestions" : undefined}
                   maxLength={f.maxLength || 500}
                   minLength={f.minLength}
                   autoComplete={
@@ -98,6 +99,7 @@ function Editor({ title, fields, initial = {}, onClose, onSave, note }) {
                   }
                 />
               )}
+              {f.name === "unit" && <datalist id="inventory-unit-suggestions">{["PCS","L","CAPS","KG"].map(u=><option key={u} value={u}/>)}</datalist>}
             </Field>
           ),
         )}
@@ -275,7 +277,9 @@ function UsageEditor({ service, onClose }) {
 }
 const inventoryFields = [
   { name: "name", label: "Supply name" },
-  { name: "unit", label: "Unit of measurement (L, KG, PCS…)" },
+  { name: "unit", label: "Unit of measurement (PCS, L, CAPS or custom)" },
+  { name: "salePrice", label: "Selling price per unit (₱)", type: "number", min: "0", step: "0.01", defaultValue: "0" },
+  { name: "sellAsAddon", label: "Available as POS / Manual Add add-on", type: "checkbox" },
   {
     name: "lowStockThreshold",
     label: "Low-stock threshold",
@@ -360,6 +364,7 @@ export function Inventory() {
               "Supply",
               "Stock on hand",
               "Low-stock threshold",
+              "Add-on price",
               "Status",
               "",
             ]}
@@ -378,6 +383,7 @@ export function Inventory() {
                 <td>
                   {i.lowStockThreshold} {i.unit}
                 </td>
+                <td>{i.sellAsAddon ? cash(i.salePrice) + " / " + i.unit : "Not for sale"}</td>
                 <td>
                   <Badge
                     value={
