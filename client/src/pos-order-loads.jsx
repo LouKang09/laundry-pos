@@ -70,56 +70,35 @@ export function PosOrder() {
     }
   }
 
-  function addService(service) {
-    setLines((current) => {
-      const index = current.findIndex(
-        (line) => line.serviceId === service.id && line.express === express,
-      );
-      if (index < 0)
-        return [
-          ...current,
-          { serviceId: service.id, actualQuantity: "1", express },
-        ];
-      return current.map((line, i) =>
-        i === index
-          ? {
-              ...line,
-              actualQuantity: new Decimal(line.actualQuantity || 0)
-                .add(1)
-                .toString(),
-            }
-          : line,
-      );
-    });
+  // One service may have multiple independent loads; never merge them silently.
+  function addService(service, selectedExpress = express) {
+    setLines((current) =>
+      current.length >= 30
+        ? current
+        : [...current, {
+            localId: crypto.randomUUID(),
+            serviceId: service.id,
+            actualQuantity: "1",
+            express: selectedExpress,
+          }],
+    );
+  }
+
+  function addAnotherLoad(line) {
+    const service = services?.find((item) => item.id === line.serviceId);
+    if (service) addService(service, line.express);
   }
 
   function updateLine(index, field, value) {
-    const changed = lines.map((line, i) =>
-      i === index ? { ...line, [field]: value } : line,
+    setLines((current) =>
+      current.map((line, i) => i === index ? { ...line, [field]: value } : line),
     );
-    if (field !== "express") {
-      setLines(changed);
-      return;
-    }
-    const merged = [];
-    for (const line of changed) {
-      const existing = merged.find(
-        (item) =>
-          item.serviceId === line.serviceId && item.express === line.express,
-      );
-      if (existing)
-        existing.actualQuantity = new Decimal(existing.actualQuantity || 0)
-          .add(line.actualQuantity || 0)
-          .toString();
-      else merged.push({ ...line });
-    }
-    setLines(merged);
   }
 
   return (
     <>
       <PageHead title="New order" eyebrow="POINT OF SALE · LOAD PRICING">
-        <span className="muted">Actual quantity is priced automatically by full and half loads.</span>
+        <span className="muted">Each load is saved and priced separately. Tap a service again or use Add another load.</span>
       </PageHead>
       <ErrorBox message={error || serviceError || customerError} />
       <div className="pos-grid">
@@ -166,7 +145,7 @@ export function PosOrder() {
             </div>
             <div className="service-grid">
               {services?.map((service) => (
-                <button className="service-card" key={service.id} onClick={() => addService(service)}>
+                <button className="service-card" key={service.id} disabled={lines.length >= 30} onClick={() => addService(service)}>
                   <span className={"service-icon " + (service.unit === "KG" ? "blue" : "amber")}>
                     {service.unit === "KG" ? <Waves /> : <Shirt />}
                   </span>
@@ -184,14 +163,14 @@ export function PosOrder() {
         <section className="panel order-summary">
           <div className="section-title">
             <h2>Order summary</h2>
-            <span className="count">{lines.length} services</span>
+            <span className="count">{lines.length} loads</span>
           </div>
           <div className="order-lines">
             {priced.length ? (
               priced.map((line, index) => (
-                <div className="order-line" key={line.serviceId + line.express}>
+                <div className="order-line" key={line.localId}>
                   <div className="line-top">
-                    <strong>{line.service?.name}</strong>
+                    <strong>Load {index + 1} · {line.service?.name}</strong>
                     <button className="icon" aria-label="Remove service" onClick={() => setLines(lines.filter((_, i) => i !== index))}>
                       <Trash2 size={17} />
                     </button>
@@ -222,6 +201,9 @@ export function PosOrder() {
                     </small>
                     <strong>{cash(line.pricing.total)}</strong>
                   </div>
+                  <button type="button" className="secondary" disabled={lines.length >= 30} onClick={() => addAnotherLoad(line)}>
+                    <Plus size={15} /> Add another load
+                  </button>
                 </div>
               ))
             ) : (
@@ -305,7 +287,7 @@ export function PosOrder() {
             const order = await post("/orders", {
               requestKey,
               customerId: customer.id,
-              items: lines,
+              items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
               washingMachine: washingMachine.trim() || undefined,
               ...(selectedPayment ? { payment: selectedPayment } : {}),
               ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
