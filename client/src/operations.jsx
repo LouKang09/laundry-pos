@@ -1134,7 +1134,7 @@ function TransactionEditor({ order, onClose, onSaved }) {
             <Field label="Quantity" type="number" min="0.001" step="0.001" value={item.actualQuantity} disabled={!canEditLines} onChange={(e) => setLine(index, "actualQuantity", e.target.value)} required />
             <label className="field"><span>Speed</span><select disabled={!canEditLines} value={item.express ? "EXPRESS" : "REGULAR"} onChange={(e) => setLine(index, "express", e.target.value === "EXPRESS")}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></label>
             {canEditLines && <button type="button" className="icon" aria-label={"Remove load " + (index + 1)} disabled={form.items.length <= 1} onClick={() => setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }))}><Trash2 size={17} /></button>}
-            {canEditLines && <button type="button" className="secondary" disabled={form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: item.serviceId, actualQuantity: "1", express: item.express }] }))}><Plus size={16} /> Another load</button>
+            {canEditLines && <button type="button" className="secondary" disabled={form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: item.serviceId, actualQuantity: "1", express: item.express }] }))}><Plus size={16} /> Another load</button>}
           </div>
         ))}
         {canEditLines && <button type="button" className="secondary" disabled={!services?.length || form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: services[0].id, actualQuantity: "1", express: false }] }))}><Plus size={16} /> Add load</button>}
