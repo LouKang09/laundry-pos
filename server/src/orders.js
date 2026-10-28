@@ -15,7 +15,7 @@ import { decodePaymentReceipt } from "./payment-receipt.js";
 import { DateTime } from "luxon";
 export const orders = Router();
 export const orderInclude = {
-  items: true,
+  items: { orderBy: { id: "asc" } },
   payment: {
     select: {
       id: true,
@@ -333,7 +333,7 @@ orders.get("/:id", async (req, res) => {
 orders.put("/:id", admin, async (req, res) => {
   const v = z.object({
     customerName: text,
-    customerPhone: z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).transform((x) => x.replace(/[ ()-]/g, "")),
+    customerPhone: z.union([z.string().trim().regex(/^\+?[0-9 ()-]{7,20}$/).transform((x) => x.replace(/[ ()-]/g, "")), z.literal("")]),
     customerRoomUnit: z.union([z.string().trim().max(80), z.null()]).optional(),
     washingMachine: z.union([z.string().trim().max(80), z.null()]).optional(),
     estimatedFrom: z.union([z.iso.datetime(), z.null()]).optional(),
@@ -361,7 +361,9 @@ orders.put("/:id", admin, async (req, res) => {
       express: i.express,
     }));
     const sortLines = (items) => items.sort((a, b) =>
-      a.serviceId.localeCompare(b.serviceId) || Number(a.express) - Number(b.express)
+      a.serviceId.localeCompare(b.serviceId) ||
+      Number(a.express) - Number(b.express) ||
+      Number(a.actualQuantity) - Number(b.actualQuantity)
     );
     const changedLines = JSON.stringify(sortLines([...oldLines])) !== JSON.stringify(sortLines([...normalizedLines]));
     if (changedLines && (old.status !== "RECEIVED" || old.paymentStatus !== "UNPAID"))
