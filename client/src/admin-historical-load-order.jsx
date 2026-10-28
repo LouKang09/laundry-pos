@@ -61,56 +61,35 @@ export function AdminHistoricalOrder() {
   );
   const claimedWithoutPayment = status === "CLAIMED" && payment === "UNPAID";
 
-  function addService(service) {
-    setLines((current) => {
-      const index = current.findIndex(
-        (line) => line.serviceId === service.id && line.express === express,
-      );
-      if (index < 0)
-        return [
-          ...current,
-          { serviceId: service.id, actualQuantity: "1", express },
-        ];
-      return current.map((line, i) =>
-        i === index
-          ? {
-              ...line,
-              actualQuantity: new Decimal(line.actualQuantity || 0)
-                .add(1)
-                .toString(),
-            }
-          : line,
-      );
-    });
+  // One service may have multiple independent loads; never merge them silently.
+  function addService(service, selectedExpress = express) {
+    setLines((current) =>
+      current.length >= 30
+        ? current
+        : [...current, {
+            localId: crypto.randomUUID(),
+            serviceId: service.id,
+            actualQuantity: "1",
+            express: selectedExpress,
+          }],
+    );
+  }
+
+  function addAnotherLoad(line) {
+    const service = services?.find((item) => item.id === line.serviceId);
+    if (service) addService(service, line.express);
   }
 
   function updateLine(index, field, value) {
-    const changed = lines.map((line, i) =>
-      i === index ? { ...line, [field]: value } : line,
+    setLines((current) =>
+      current.map((line, i) => i === index ? { ...line, [field]: value } : line),
     );
-    if (field !== "express") {
-      setLines(changed);
-      return;
-    }
-    const merged = [];
-    for (const line of changed) {
-      const existing = merged.find(
-        (item) =>
-          item.serviceId === line.serviceId && item.express === line.express,
-      );
-      if (existing)
-        existing.actualQuantity = new Decimal(existing.actualQuantity || 0)
-          .add(line.actualQuantity || 0)
-          .toString();
-      else merged.push({ ...line });
-    }
-    setLines(merged);
   }
 
   return (
     <>
       <PageHead title="Manual add" eyebrow="ADMIN · HISTORICAL LOAD PRICING">
-        <span className="muted">Add a missed transaction from a past date.</span>
+        <span className="muted">Add past transactions with separate, individually priced loads for each service.</span>
       </PageHead>
       <section className="panel" style={{ marginBottom: 16 }}>
         <strong>Past dates only</strong>
@@ -178,7 +157,7 @@ export function AdminHistoricalOrder() {
             </div>
             <div className="service-grid">
               {services?.map((service) => (
-                <button className="service-card" key={service.id} onClick={() => addService(service)}>
+                <button className="service-card" key={service.id} disabled={lines.length >= 30} onClick={() => addService(service)}>
                   <span className={"service-icon " + (service.unit === "KG" ? "blue" : "amber")}>
                     {service.unit === "KG" ? <Waves /> : <Shirt />}
                   </span>
@@ -194,13 +173,13 @@ export function AdminHistoricalOrder() {
         </div>
 
         <section className="panel order-summary">
-          <div className="section-title"><h2>Historical transaction</h2><span className="count">{lines.length} services</span></div>
+          <div className="section-title"><h2>Historical transaction</h2><span className="count">{lines.length} loads</span></div>
           <div className="order-lines">
             {priced.length ? (
               priced.map((line, index) => (
-                <div className="order-line" key={line.serviceId + line.express}>
+                <div className="order-line" key={line.localId}>
                   <div className="line-top">
-                    <strong>{line.service?.name}</strong>
+                    <strong>Load {index + 1} · {line.service?.name}</strong>
                     <button className="icon" aria-label="Remove service" onClick={() => setLines(lines.filter((_, i) => i !== index))}><Trash2 size={17} /></button>
                   </div>
                   <div className="line-inputs">
@@ -227,6 +206,9 @@ export function AdminHistoricalOrder() {
                     </small>
                     <strong>{cash(line.pricing.total)}</strong>
                   </div>
+                  <button type="button" className="secondary" disabled={lines.length >= 30} onClick={() => addAnotherLoad(line)}>
+                    <Plus size={15} /> Add another load
+                  </button>
                 </div>
               ))
             ) : <Empty>Select services for the historical transaction.</Empty>}
@@ -273,7 +255,7 @@ export function AdminHistoricalOrder() {
                   customerId: customer.id,
                   status,
                   washingMachine: washingMachine.trim() || undefined,
-                  items: lines,
+                  items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
                   ...(paymentPayload(payment, reference, receiptDataUrl) ? { payment: paymentPayload(payment, reference, receiptDataUrl) } : {}),
                 });
                 setSaved(order);
