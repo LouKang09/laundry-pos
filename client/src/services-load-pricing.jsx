@@ -42,10 +42,10 @@ function editableTiers(service) {
   if (Array.isArray(service?.pricingTiers) && service.pricingTiers.length)
     return service.pricingTiers.map(t => ({ ...t }));
   if (!service?.id) return starterTiers.map(t => ({ ...t }));
-  return [
-    { label: "Full", quantity: String(service.regularFullQuantity), regularPrice: String(service.regularFullPrice), expressPrice: String(service.expressFullPrice) },
-    { label: "Half", quantity: String(service.regularHalfQuantity), regularPrice: String(service.regularHalfPrice), expressPrice: String(service.expressHalfPrice) },
-  ];
+  const full = { label: "Full", quantity: String(service.regularFullQuantity), regularPrice: String(service.regularFullPrice), expressPrice: String(service.expressFullPrice) };
+  const half = { label: "Half", quantity: String(service.regularHalfQuantity), regularPrice: String(service.regularHalfPrice), expressPrice: String(service.expressHalfPrice) };
+  // Legacy single-piece services stored Full and Half with identical capacity.
+  return Number(full.quantity) === Number(half.quantity) ? [full] : [full, half];
 }
 function servicePayload(value, tiers, active = value.active) {
   const sorted = [...tiers].sort((a,b) => Number(b.quantity) - Number(a.quantity));
