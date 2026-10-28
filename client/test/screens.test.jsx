@@ -102,3 +102,14 @@ test('admin manual add allows multiple separate loads for the same service', asy
   expect(screen.getAllByLabelText('Actual kg')).toHaveLength(2);
   expect(screen.getByText(/Load 2 · Wash & Fold/)).toBeTruthy();
 });
+
+
+test('admin manual entry offers Pay at Pickup for an unclaimed historical order', async () => {
+  const ui = userEvent.setup();
+  mount(<AdminHistoricalOrder />);
+  await screen.findByRole('button', {name: /Wash & Fold/});
+  expect(screen.getByRole('button', {name: /Pay at Pickup · Mark Ready/})).toBeTruthy();
+  await ui.click(screen.getByRole('button', {name: /Pay at Pickup · Mark Ready/}));
+  expect(screen.getByRole('button', {name: /Pay at Pickup Save as unpaid/})).toBeTruthy();
+  expect(screen.getByText(/The order will be saved as unpaid/)).toBeTruthy();
+});
