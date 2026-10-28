@@ -1,84 +1,61 @@
 import Decimal from "decimal.js";
 
-const money = (value) =>
-  new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-  }).format(Number(value || 0));
+const money = (value) => new Intl.NumberFormat("en-PH", {
+  style: "currency", currency: "PHP",
+}).format(Number(value || 0));
+const qty = (value) => new Decimal(value || 0).toDecimalPlaces(3).toString();
 
-const qty = (value) =>
-  new Decimal(value || 0).toDecimalPlaces(3).toString();
+export function loadTiers(service, express = false) {
+  if (!service) return [];
+  const tiers = Array.isArray(service.pricingTiers) && service.pricingTiers.length
+    ? service.pricingTiers
+    : [
+      { label: "Full", quantity: service.regularFullQuantity, regularPrice: service.regularFullPrice, expressPrice: service.expressFullPrice },
+      { label: "Half", quantity: service.regularHalfQuantity, regularPrice: service.regularHalfPrice, expressPrice: service.expressHalfPrice },
+    ];
+  return tiers.map(t => ({
+    label: t.label,
+    quantity: new Decimal(t.quantity || 0),
+    price: new Decimal((express ? t.expressPrice : t.regularPrice) || 0),
+  })).sort((a,b) => b.quantity.comparedTo(a.quantity));
+}
 
 export function loadPlan(service, express = false) {
-  if (!service) return null;
-  return express
-    ? {
-        fullPrice: new Decimal(service.expressFullPrice || 0),
-        fullQuantity: new Decimal(service.expressFullQuantity || 0),
-        halfPrice: new Decimal(service.expressHalfPrice || 0),
-        halfQuantity: new Decimal(service.expressHalfQuantity || 0),
-      }
-    : {
-        fullPrice: new Decimal(service.regularFullPrice || 0),
-        fullQuantity: new Decimal(service.regularFullQuantity || 0),
-        halfPrice: new Decimal(service.regularHalfPrice || 0),
-        halfQuantity: new Decimal(service.regularHalfQuantity || 0),
-      };
+  const tiers = loadTiers(service, express);
+  return tiers.length ? {
+    fullPrice: tiers[0].price, fullQuantity: tiers[0].quantity,
+    halfPrice: (tiers[1] || tiers[0]).price,
+    halfQuantity: (tiers[1] || tiers[0]).quantity,
+  } : null;
 }
 
 export function servicePlanText(service, express = false) {
-  const plan = loadPlan(service, express);
-  if (!plan) return "";
-  const unit = service.unit === "KG" ? "kg" : "pc";
-  return `Full ${money(plan.fullPrice)} / ${qty(plan.fullQuantity)} ${unit} · Half ${money(plan.halfPrice)} / ${qty(plan.halfQuantity)} ${unit}`;
+  return loadTiers(service, express)
+    .map(t => `${t.label} ${money(t.price)} / ${qty(t.quantity)} ${service.unit}`)
+    .join(" · ");
 }
 
 export function calculateLoadPricing(service, actualQuantity, express = false) {
-  const actual = new Decimal(actualQuantity || 0),
-    plan = loadPlan(service, express);
-  if (!service || !plan || actual.lte(0) || plan.fullQuantity.lte(0)) {
-    return {
-      actual,
-      fullLoads: 0,
-      halfLoads: 0,
-      billable: new Decimal(0),
-      total: new Decimal(0),
-      breakdown: "",
-    };
-  }
-
-  let fullLoads = actual.div(plan.fullQuantity).floor().toNumber();
-  const remainder = actual.minus(plan.fullQuantity.mul(fullLoads));
-  let halfLoads = 0;
+  const actual = new Decimal(actualQuantity || 0), tiers = loadTiers(service, express);
+  const empty = { actual, fullLoads: 0, halfLoads: 0, billable: new Decimal(0), total: new Decimal(0), breakdown: "" };
+  if (!tiers.length || actual.lte(0) || tiers.some(t => t.quantity.lte(0) || t.price.lte(0))) return empty;
+  const largest = tiers[0];
+  const fullLoads = actual.div(largest.quantity).floor();
+  const remainder = actual.minus(fullLoads.mul(largest.quantity));
+  const portions = [];
+  if (fullLoads.gt(0)) portions.push({ tier: largest, count: fullLoads });
   if (remainder.gt(0)) {
-    if (remainder.lte(plan.halfQuantity)) halfLoads = 1;
-    else fullLoads += 1;
+    const matching = [...tiers].reverse().find(t => t.quantity.gte(remainder)) || largest;
+    const existing = portions.find(row => row.tier === matching);
+    if (existing) existing.count = existing.count.add(1);
+    else portions.push({ tier: matching, count: new Decimal(1) });
   }
-
-  const billable = plan.fullQuantity
-    .mul(fullLoads)
-    .add(plan.halfQuantity.mul(halfLoads));
-  const total = plan.fullPrice
-    .mul(fullLoads)
-    .add(plan.halfPrice.mul(halfLoads))
+  const billable = portions.reduce((sum,row) => sum.add(row.tier.quantity.mul(row.count)), new Decimal(0));
+  const total = portions.reduce((sum,row) => sum.add(row.tier.price.mul(row.count)), new Decimal(0))
     .toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
-  const unit = service.unit === "KG" ? "kg" : "pc";
-  const parts = [];
-  if (fullLoads)
-    parts.push(
-      `${fullLoads} Full (${qty(plan.fullQuantity)} ${unit}) × ${money(plan.fullPrice)}`,
-    );
-  if (halfLoads)
-    parts.push(
-      `1 Half (${qty(plan.halfQuantity)} ${unit}) × ${money(plan.halfPrice)}`,
-    );
-
-  return {
-    actual,
-    fullLoads,
-    halfLoads,
-    billable,
-    total,
-    breakdown: parts.join(" + "),
-  };
+  const breakdown = portions.map(({tier,count}) =>
+    `${count.toString()} ${tier.label} (${qty(tier.quantity)} ${service.unit}) × ${money(tier.price)}`).join(" + ");
+  return { actual, fullLoads: fullLoads.toNumber(),
+    halfLoads: portions.filter(row => row.tier !== largest).reduce((sum,row) => sum + row.count.toNumber(),0),
+    billable, total, breakdown };
 }
