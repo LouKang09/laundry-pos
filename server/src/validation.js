@@ -117,12 +117,6 @@ export const orderSchema = z
   .strict()
   .refine(
     (v) =>
-      new Set(v.items.map((i) => i.serviceId + ":" + i.express)).size ===
-      v.items.length,
-    { message: "Combine duplicate service/speed lines before saving" },
-  )
-  .refine(
-    (v) =>
       (!v.estimatedFrom && !v.estimatedTo) ||
       (v.estimatedFrom && v.estimatedTo && v.estimatedFrom < v.estimatedTo),
     { message: "Set a valid pickup window with both start and end" },
