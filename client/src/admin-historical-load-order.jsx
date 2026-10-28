@@ -230,6 +230,21 @@ export function AdminHistoricalOrder() {
                 <span className="muted">Water POS-style payment selection</span>
               </div>
             </div>
+            {status === "CLAIMED" && (
+              <div className="water-payment-info water-payment-info-unpaid">
+                <p>Pay at Pickup is available for orders that have not been claimed. Historical orders default to Claimed, so unpaid payment is hidden until the stage is changed.</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setStatus("READY");
+                    setPayment("UNPAID");
+                  }}
+                >
+                  <Plus size={16} /> Pay at Pickup · Mark Ready
+                </button>
+              </div>
+            )}
             <PaymentMethodPicker
               method={payment}
               setMethod={setPayment}
