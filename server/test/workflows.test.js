@@ -896,3 +896,33 @@ test("34 historical manual records accept today's business date but reject futur
   }).expect(400);
   assert.equal(await db.order.count(), existing + 1);
 });
+
+
+test("35 Water POS-style sales analytics has selectable hour/day granularity and method totals",async()=>{
+  const day=DateTime.now().setZone("Asia/Manila").toISODate();
+  const hourly=await admin.get("/api/dashboard/sales-analytics?from="+day+"&to="+day).expect(200);
+  assert.equal(hourly.body.grain,"hourly");
+  assert.equal(hourly.body.timeline.length,24);
+  assert.deepEqual(hourly.body.timeline.map(r=>r.hour),Array.from({length:24},(_,i)=>i));
+  assert(hourly.body.timeline.every(r=>r.date===day));
+  assert.equal(hourly.body.days,1);
+  const totals=hourly.body.totals;
+  assert(Math.abs(totals.sales-(totals.cash+totals.gcash+totals.other))<0.02);
+  assert.equal(Number(hourly.body.netCollections.toFixed(2)),Number((totals.sales-hourly.body.expenses).toFixed(2)));
+  assert(hourly.body.bookedOrders>=0);
+  await staff.get("/api/dashboard/sales-analytics?from="+day+"&to="+day).expect(403);
+  const start=DateTime.now().setZone("Asia/Manila").minus({days:2}).toISODate();
+  const three=await admin.get("/api/dashboard/sales-analytics?from="+start+"&to="+day).expect(200);
+  assert.equal(three.body.grain,"hourly");
+  assert.equal(three.body.timeline.length,72);
+  const seven=DateTime.now().setZone("Asia/Manila").minus({days:6}).toISODate();
+  const week=await admin.get("/api/dashboard/sales-analytics?from="+seven+"&to="+day).expect(200);
+  assert.equal(week.body.grain,"daily");
+  assert.equal(week.body.timeline.length,7);
+  assert(week.body.timeline.every(r=>r.hour===undefined));
+  const next=DateTime.now().setZone("Asia/Manila").plus({days:1}).toISODate();
+  await admin.get("/api/dashboard/sales-analytics?from="+day+"&to="+next).expect(400);
+  await admin.get("/api/dashboard/sales-analytics?from="+day+"&to="+seven).expect(400);
+  const far=DateTime.now().setZone("Asia/Manila").minus({days:366}).toISODate();
+  await admin.get("/api/dashboard/sales-analytics?from="+far+"&to="+day).expect(400);
+});
