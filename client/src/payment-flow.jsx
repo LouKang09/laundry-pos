@@ -3,6 +3,8 @@ import { scanPaymentReference } from "./receipt-ocr";
 import { Camera, ImagePlus } from "lucide-react";
 import { cash } from "./ui";
 
+const noop = () => {};
+
 const METHODS = [
   { value: "CASH", icon: "₱", title: "Cash", note: "Pay in cash" },
   { value: "GCASH", icon: "G", title: "GCash", note: "QR or transfer" },
@@ -91,7 +93,7 @@ export function PaymentMethodPicker({
   setReceiptDataUrl,
   allowUnpaid = true,
   isCorrection = false,
-  onScanChange = () => {},
+  onScanChange = noop,
 }) {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState("");
