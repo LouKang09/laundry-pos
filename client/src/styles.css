@@ -2440,3 +2440,54 @@ td .actions {
 .water-scan-spinner{flex-shrink:0;display:inline-block;width:16px;height:16px;border:2px solid #b0cfc0;border-top-color:#237f5e;border-radius:50%;animation:water-scan-spin .9s linear infinite}
 @keyframes water-scan-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.water-scan-spinner{animation:none;border-top-color:#237f5e}}
+
+
+/* Water POS-style collection analytics — isolated from the laundry workflow. */
+.laundry-date-presets{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#f5f8fb;border:1px solid #dfe8ee;border-radius:14px;padding:11px 14px;margin:0 0 18px}
+.laundry-date-presets>span:first-child{font-weight:750;font-size:.84rem;color:#29435b;margin-right:4px}
+.laundry-date-presets>span:last-child{font-size:.75rem;margin-left:auto}
+.laundry-date-presets button{appearance:none;border:1px solid #d1e0e9;border-radius:999px;background:#fff;padding:8px 13px;color:#36546a;cursor:pointer;font-size:.8rem;font-weight:750;transition:background .16s ease,border-color .16s ease}
+.laundry-date-presets button:hover{background:#e7f3fc;border-color:#9ccce7}
+.laundry-date-presets button.active{background:#146c99;color:#fff;border-color:#146c99}
+.laundry-date-presets button:focus-visible,.laundry-legend-pill:focus-visible,.laundry-legend-reset:focus-visible{outline:3px solid #a4cfe7;outline-offset:3px}
+.laundry-sales-section{margin:26px 0 30px;min-width:0}
+.laundry-sales-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin:0 0 18px}
+.laundry-sales-heading h2{font-size:1.48rem;margin:3px 0 6px;color:var(--ink,#1d354a)}
+.laundry-sales-heading p:not(.laundry-sales-eyebrow){font-size:.84rem;color:var(--muted,#748393);margin:0;line-height:1.55}
+.laundry-sales-eyebrow{font-size:.7rem;letter-spacing:.11em;font-weight:850;color:#217da7;text-transform:uppercase;margin:0 0 6px}
+.laundry-date-badge{background:#eaf3f9;color:#226084;padding:9px 13px;border-radius:999px;font-size:.77rem;font-weight:750;white-space:nowrap}
+.laundry-sales-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.laundry-sales-metric{min-width:0;min-height:134px;background:#fff;border:1px solid #e2eaf0;border-radius:15px;padding:18px 19px;display:flex;flex-direction:column;gap:8px;box-shadow:0 4px 16px rgba(22,56,80,.035)}
+.laundry-sales-metric>span{font-size:.84rem;font-weight:800;color:#577086}
+.laundry-sales-metric>strong{color:#153750;font-size:clamp(1.32rem,2vw,1.88rem);line-height:1.2;letter-spacing:-.025em;overflow-wrap:anywhere}
+.laundry-sales-metric>small{font-size:.74rem;line-height:1.4;color:#6d8090;margin-top:auto}
+.laundry-sales-metric.metric-sales{border-top:3px solid #2785e7}
+.laundry-sales-metric.metric-cash{border-top:3px solid #ed5f83}
+.laundry-sales-metric.metric-gcash{border-top:3px solid #e59a33}
+.laundry-sales-metric.metric-other{border-top:3px solid #8c75e6}
+.laundry-sales-metric.metric-expenses{border-top:3px solid #879cae}
+.laundry-sales-metric.metric-net{border-top:3px solid #319b81}
+.laundry-sales-chart{padding:23px 24px 16px!important;overflow:hidden}
+.laundry-sales-chart-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}
+.laundry-sales-chart-header h3{margin:0 0 7px;font-size:1.22rem;color:#17374e}
+.laundry-sales-chart-header p:not(.laundry-sales-eyebrow){font-size:.82rem;color:#718494;margin:0;line-height:1.45}
+.laundry-trend-mode{border-radius:9px;border:1px solid #d2e5f1;background:#edf7fd;color:#267097;padding:7px 10px;white-space:nowrap;font-size:.7rem;font-weight:850;letter-spacing:.06em}
+.laundry-trend-legend{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:13px 0 8px}
+.laundry-legend-pill{display:flex;align-items:center;gap:9px;min-height:34px;padding:7px 11px;background:#fff;border:1px solid #dbe6ec;border-radius:9px;color:#395265;font-size:.78rem;font-weight:750;cursor:pointer}
+.laundry-legend-pill.is-off{opacity:.5;border-style:dashed;background:#f5f7f9}
+.laundry-legend-dot{display:inline-block;width:9px;height:9px;flex:0 0 9px;border-radius:999px;background:var(--series-color,#2785e7)}
+.laundry-legend-reset{margin-left:auto;background:transparent;border:0;color:#226d9b;font-size:.78rem;font-weight:700;cursor:pointer;padding:7px 8px}
+.laundry-legend-reset:disabled{opacity:.4;cursor:default}
+.laundry-trend-scroll{overflow-x:auto;overflow-y:hidden;max-width:100%;padding:3px 0 8px;scrollbar-color:#cadde8 transparent}
+.laundry-trend-scroll svg{display:block;max-width:none;background:#fff}
+.laundry-trend-scroll svg circle[tabindex]{cursor:crosshair;outline:none}
+.laundry-trend-scroll svg circle[tabindex]:focus-visible{stroke:#193953;stroke-width:1.5}
+.laundry-trend-detail{min-height:44px;border-top:1px solid #e5edf2;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin-top:7px;padding:11px 3px 5px;color:#668094;font-size:.78rem;line-height:1.5}
+.laundry-trend-detail strong{color:#1e4059;font-size:.86rem}
+.laundry-trend-detail span:last-child{flex:1}
+.laundry-sales-footnote{font-size:.75rem;color:#72818e;line-height:1.6;margin:10px 0 0;padding:14px 0 0;border-top:1px solid #e8edf1}
+.laundry-sales-footnote strong{color:#4b687a}
+@media(max-width:1100px){.laundry-sales-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.laundry-sales-heading h2{font-size:1.24rem}.laundry-date-presets>span:last-child{display:none}.laundry-sales-metrics{gap:10px}.laundry-sales-metric{min-height:122px;padding:14px 13px}.laundry-sales-metric>strong{font-size:1.26rem}.laundry-sales-chart{padding:17px 13px 12px!important}.laundry-legend-reset{margin-left:0}.laundry-sales-chart-header h3{font-size:1.1rem}}
+@media(max-width:410px){.laundry-sales-metrics{grid-template-columns:1fr}.laundry-sales-metric{min-height:104px}}
+@media(prefers-reduced-motion:reduce){.laundry-date-presets button{transition:none}}
