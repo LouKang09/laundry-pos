@@ -22,6 +22,7 @@ export const orderInclude = {
     select: {
       id: true,
       method: true,
+      provider: true,
       amount: true,
       reference: true,
       receiptMime: true,
@@ -53,7 +54,8 @@ async function receive(tx, order, userId, payment) {
       orderId: order.id,
       userId,
       method: payment.method,
-      reference: payment.method === "GCASH" ? payment.reference : null,
+      provider: payment.method === "OTHERS" ? payment.provider : null,
+      reference: payment.method !== "CASH" ? payment.reference : null,
       amount: order.total,
       ...receipt,
     },
@@ -64,6 +66,7 @@ async function receive(tx, order, userId, payment) {
   });
   await audit(tx, userId, "PAYMENT_RECEIVED", "Order", order.id, {
     method: payment.method,
+    ...(payment.provider ? { provider: payment.provider } : {}),
     amount: order.total.toString(),
   });
 }

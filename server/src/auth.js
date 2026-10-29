@@ -38,7 +38,7 @@ export async function authenticate(req, res, next) {
   )
     return res
       .status(403)
-      .json({ error: "Security token expired. Refresh and try again." });
+      .json({ code: "CSRF_MISMATCH", error: "Security token changed. Please retry." });
   next();
 }
 export function admin(req, res, next) {

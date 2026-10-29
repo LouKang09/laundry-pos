@@ -96,13 +96,22 @@ export const addonSchema = z.array(z.object({
 
 export const paymentSchema = z
   .object({
-    method: z.enum(["CASH", "GCASH"]),
-    reference: z.string().trim().min(4).max(100).optional(),
+    method: z.enum(["CASH", "GCASH", "OTHERS"]),
+    provider: z.enum(["MAYA", "MARIBANK", "GOTYME", "BPI"]).optional(),
+    reference: z.string().trim().min(3).max(100).optional(),
     receiptDataUrl: z.string().max(3500000).optional(),
   })
   .strict()
-  .refine((v) => v.method !== "GCASH" || !!v.reference, {
-    message: "GCash reference is required",
+  .refine(v => v.method === "CASH" || !!v.reference, {
+    message: "A digital payment reference number (at least 3 characters) is required",
+    path: ["reference"],
+  })
+  .refine(v => (v.method === "OTHERS") === !!v.provider, {
+    message: "Select Maya, MariBank, GoTyme, or BPI for Others payments",
+    path: ["provider"],
+  })
+  .refine(v => v.method !== "CASH" || (!v.reference && !v.receiptDataUrl), {
+    message: "Cash payments cannot include a digital reference or receipt",
   });
 
 export const orderSchema = z

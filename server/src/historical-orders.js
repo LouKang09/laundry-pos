@@ -127,8 +127,9 @@ historicalOrders.post("/historical", admin, async (req, res) => {
                 create: {
                   userId: req.user.id,
                   method: data.payment.method,
+                  provider: data.payment.method === "OTHERS" ? data.payment.provider : null,
                   reference:
-                    data.payment.method === "GCASH"
+                    data.payment.method !== "CASH"
                       ? data.payment.reference
                       : null,
                   amount: total,
@@ -147,6 +148,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       historicalDate: data.historicalDate,
       status: data.status,
       paymentMethod: data.payment?.method || "UNPAID",
+      paymentProvider: data.payment?.provider || null,
       total: total.toString(),
       inventoryAdjusted: false,
     });

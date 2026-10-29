@@ -1,0 +1,2 @@
+ALTER TYPE "PaymentMethod" ADD VALUE IF NOT EXISTS 'OTHERS';
+ALTER TABLE "Payment" ADD COLUMN "provider" TEXT;

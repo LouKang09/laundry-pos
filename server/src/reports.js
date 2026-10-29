@@ -97,12 +97,13 @@ async function report(from, to) {
     expenses: expense.toFixed(2),
     estimatedProfit: gross.sub(expense).toFixed(2),
     paymentsReceived: sum(payments, "amount").toFixed(2),
-    paymentMethods: ["CASH", "GCASH"].map((method) => ({
-      method,
-      amount: sum(
-        payments.filter((p) => p.method === method),
-        "amount",
-      ).toFixed(2),
+    paymentMethods: [
+      { method: "CASH" }, { method: "GCASH" },
+      ...["MAYA", "MARIBANK", "GOTYME", "BPI"].map(provider => ({ method: "OTHERS", provider })),
+    ].map(({ method, provider }) => ({
+      method: provider || method,
+      amount: sum(payments.filter(p =>
+        p.method === method && (!provider || p.provider === provider)), "amount").toFixed(2),
     })),
     services: Object.values(services),
     staff: Object.values(staff),
