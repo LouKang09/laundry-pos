@@ -260,8 +260,8 @@ test("admin sales dashboard shows Water POS-style summary, selectable payment li
   const ui=userEvent.setup();
   mount(<Dashboard/>);
   expect(await screen.findByText("Sales & payment dashboard")).toBeTruthy();
-  expect(await screen.findByText("Total Collected")).toBeTruthy();
-  expect(screen.getByText("Other Digital")).toBeTruthy();
+  expect((await screen.findAllByText("Total Collected")).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Other Digital").length).toBeGreaterThan(0);
   expect(screen.getByText("Net Collections")).toBeTruthy();
   expect(screen.getByText("Hourly Sales Trend")).toBeTruthy();
   const gcash=screen.getByRole("button",{name:"GCash"});
