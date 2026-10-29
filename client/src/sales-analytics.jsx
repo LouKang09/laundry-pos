@@ -1,4 +1,4 @@
-import React, {useMemo,useState} from "react";
+import React, {useEffect,useMemo,useState} from "react";
 import {useData,cash,Empty} from "./ui";
 
 const SERIES=[
@@ -25,6 +25,7 @@ function compact(n){
 function TrendChart({data}){
   const [visible,setVisible]=useState(["sales","cash","gcash","other"]);
   const [focus,setFocus]=useState(null);
+  useEffect(()=>setFocus(null),[data]);
   const series=SERIES.filter(s=>visible.includes(s.key));
   const rows=data.timeline||[];
   // Keep short-range hourly plots readable on tablets/phones, and allow
@@ -111,7 +112,7 @@ function TrendChart({data}){
       <div className="laundry-trend-detail" role="status" aria-live="polite">
         {focused?<><span className="laundry-legend-dot" style={{background:focused.color}}/>
           <strong>{focused.label}: {cash(focused[focused.key])}</strong>
-          <span>{shortDate(focused.date)}{focused.hour!=null?" · "+hourLabel(focused.hour):""} · {focused.transactions} payment{focused.transactions===1?"":"s"} in period</span>
+          <span>{shortDate(focused.date)}{focused.hour!=null?" · "+hourLabel(focused.hour):""} · {focused.transactions} payment{focused.transactions===1?"":"s"} across all methods in this interval</span>
         </>:<span>Select or tap a colored point to inspect that payment method's exact amount. Hide other lines using the legend.</span>}
       </div>
     </div>
