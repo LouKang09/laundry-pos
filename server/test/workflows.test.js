@@ -794,3 +794,15 @@ test("31 Other payment providers, receipt snapshots, and strict provider validat
   }).expect(201);
   assert.equal(historical.body.payment.provider,"BPI");
 });
+
+test("32 served app shell never caches HTML and exposes active bundle fingerprint",async()=>{
+  const page=await request(app).get("/new").expect(200);
+  assert.match(page.headers["cache-control"]||"",/no-store/);
+  assert.match(page.text,/\/assets\/index-[^" ]+\.js/);
+  const version=await request(app).get("/api/app-version").expect(200);
+  assert.match(version.headers["cache-control"]||"",/no-store/);
+  assert.match(version.body.entry||"",/^\/assets\/index-[^" ]+\.js$/);
+  assert(page.text.includes(version.body.entry));
+  const root=await request(app).get("/").expect(200);
+  assert.match(root.headers["cache-control"]||"",/no-store/);
+});

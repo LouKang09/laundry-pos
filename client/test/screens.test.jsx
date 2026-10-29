@@ -12,6 +12,7 @@ import {Customers} from '../src/operations';
 import {Dashboard,NewOrder,OrderList} from '../src/workflow';
 import {PosOrder} from '../src/pos-order-loads';
 import {AdminHistoricalOrder} from '../src/admin-historical-load-order';
+import {AdminHistoricalOrder as LegacyHistoricalOrder} from '../src/admin-historical-order';
 import {Services,Inventory,Expenses,BusinessSettings} from '../src/management';
 import {Reports} from '../src/reporting-page';
 import {UserManagement,Logs} from '../src/admin-pages';
@@ -198,4 +199,31 @@ test("live POS order summary has dedicated responsive layout",async()=>{
   await screen.findByRole('button',{name:/Wash & Fold/});
   expect(document.querySelector('.live-pos-grid')).toBeTruthy();
   expect(document.querySelector('.live-pos-grid .order-summary')).toBeTruthy();
+});
+
+test("manual transaction renders all current controls, even through the legacy import path",async()=>{
+  const user=userEvent.setup();
+  mount(<LegacyHistoricalOrder/>);
+  await screen.findByRole('button',{name:/Wash & Fold/});
+  const summary=document.querySelector('.historical-summary');
+  expect(summary).toBeTruthy();
+  expect(summary.textContent).toContain('CURRENT CHECKOUT');
+  expect(screen.getByText('Optional add-ons')).toBeTruthy();
+  expect(screen.getByRole('button',{name:/Cash Pay in cash/})).toBeTruthy();
+  expect(screen.getByRole('button',{name:/GCash QR or transfer/})).toBeTruthy();
+  expect(screen.getByRole('button',{name:/Others Maya or bank transfer/})).toBeTruthy();
+  expect(screen.queryByText('Water POS-style payment selection')).toBeNull();
+
+  await user.click(screen.getByRole('button',{name:/Wash & Fold/}));
+  expect(screen.getByRole('button',{name:'Add another load'})).toBeTruthy();
+  await user.click(screen.getByRole('button',{name:'Add another load'}));
+  expect(screen.getAllByLabelText('Actual kg')).toHaveLength(2);
+
+  await user.click(screen.getByRole('button',{name:/Others Maya or bank transfer/}));
+  const provider=screen.getByRole('combobox',{name:'Payment provider'});
+  expect(provider).toBeTruthy();
+  expect([...provider.options].map(x=>x.textContent)).toEqual(['Maya','MariBank','GoTyme','BPI']);
+  await user.selectOptions(provider,'GOTYME');
+  expect(screen.getByText(/GoTyme reference number/)).toBeTruthy();
+  expect(screen.getByText('Optional add-ons')).toBeTruthy();
 });
