@@ -31,12 +31,17 @@ import {
   OrderDetail,
 } from "./operations";
 import { printReport } from "./report-print";
+import { SalesAnalytics } from "./sales-analytics";
 
 const activeStages = ["RECEIVED", "WASHING", "DRYING", "FOLDING"];
 const today = () =>
   new Date().toLocaleDateString("en-CA", {
     timeZone: window.businessZone || "Asia/Manila",
   });
+const previousBusinessDay = (base,days) => {
+  const [year,month,day]=base.split("-").map(Number);
+  return new Date(Date.UTC(year,month-1,day-days)).toISOString().slice(0,10);
+};
 const prettyDay = (value) =>
   new Date(value + "T12:00:00").toLocaleDateString("en-PH", {
     timeZone: window.businessZone || "Asia/Manila",
@@ -237,6 +242,14 @@ export function Dashboard() {
     setRangeFrom(current);
     setRangeTo(current);
   };
+  const goPreset = (days) => {
+    const end = today();
+    if(days===1){ goToday();return; }
+    if(days===0){setViewMode("single");setViewDate(previousBusinessDay(end,1));return;}
+    setViewMode("range");
+    setRangeFrom(previousBusinessDay(end,days-1));
+    setRangeTo(end);
+  };
 
   const stageCard = (status) => {
     const content = (
@@ -335,6 +348,15 @@ export function Dashboard() {
         </Link>
       </PageHead>
 
+      {admin && <div className="laundry-date-presets" role="group" aria-label="Sales dashboard quick date ranges">
+        <span>Quick view</span>
+        {[["Today",1],["Yesterday",0],["3 days",3],["7 days",7],["30 days",30]].map(([title,days])=>{
+          const active=days===1?isTodayView:days===0?viewMode==="single"&&viewDate===previousBusinessDay(today(),1):isRangeView&&rangeFrom===previousBusinessDay(today(),days-1)&&rangeTo===today();
+          return <button type="button" key={title} className={active?"active":""} aria-pressed={active} onClick={()=>goPreset(days)}>{title}</button>;
+        })}
+        <span className="muted">Or use the custom date filters above</span>
+      </div>}
+
       {!isTodayView && (
         <section className="panel" style={{ marginBottom: 16 }}>
           <strong>
@@ -417,6 +439,12 @@ export function Dashboard() {
               />
             </div>
 
+            {admin && <SalesAnalytics
+              from={isRangeView?rangeFrom:viewDate}
+              to={isRangeView?rangeTo:viewDate}
+              rev={rev}
+            />}
+
             <div className="section-title">
               <div>
                 <h2>
@@ -447,20 +475,7 @@ export function Dashboard() {
 
             {admin && (
               <section className="panel" style={{ marginTop: 18 }}>
-                <div className="section-title">
-                  <div>
-                    <h2>Sales trend</h2>
-                    <span className="muted">
-                      {isTodayView
-                        ? "Connected daily graph · last 7 days"
-                        : isRangeView
-                          ? `Selected range · ${viewLabel}`
-                          : `7-day trend ending ${viewLabel}`}
-                    </span>
-                  </div>
-                </div>
-                <LineSalesChart rows={d.trend} />
-                <div className="section-title" style={{ marginTop: 14 }}>
+                <div className="section-title" style={{ marginTop: 0 }}>
                   <div>
                     <h3>Print business report</h3>
                     <span className="muted">
