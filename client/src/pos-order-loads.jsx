@@ -133,7 +133,7 @@ export function PosOrder() {
                 <div className="customer-results">
                   {customers?.rows.slice(0, 5).map((item) => (
                     <button key={item.id} onClick={() => setCustomer(item)}>
-                      <span><strong>{customerDisplayName(item)}</strong><small>{item.phone || "No phone number"}{item.roomUnit ? " · " + item.roomUnit : ""}</small></span>
+                      <span><strong>{customerDisplayName(item)}</strong><small>{item.phone || "No phone number"}</small></span>
                       <Plus size={17} />
                     </button>
                   ))}
