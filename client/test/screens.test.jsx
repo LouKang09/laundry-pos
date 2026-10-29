@@ -227,3 +227,30 @@ test("manual transaction renders all current controls, even through the legacy i
   expect(screen.getByText(/GoTyme reference number/)).toBeTruthy();
   expect(screen.getByText('Optional add-ons')).toBeTruthy();
 });
+
+
+test("historical manual entry shows customer rooms before selection and includes today's date", async () => {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const parts = Object.fromEntries(today.map(({type,value})=>[type,value]));
+  const todayDate = parts.year + "-" + parts.month + "-" + parts.day;
+  const name = prefix + " Adam";
+  await post("/customers",{name,phone:"09123456789",roomUnit:"801"});
+
+  const ui = userEvent.setup();
+  mount(<AdminHistoricalOrder />);
+  await screen.findByRole("button",{name:/Wash & Fold/});
+  const datePicker = screen.getByLabelText("Transaction date");
+  expect(datePicker.max).toBe(todayDate);
+  await ui.clear(datePicker);
+  await ui.type(datePicker,todayDate);
+  expect(datePicker.value).toBe(todayDate);
+  expect(screen.getByText(/Past dates and today/)).toBeTruthy();
+
+  await ui.type(screen.getByPlaceholderText("Search name, phone, room or unit"),name);
+  const result = await screen.findByRole("button",{name:new RegExp(name + ".*Room 801")});
+  expect(result.textContent).toContain("Room 801");
+  await ui.click(result);
+  expect(screen.getByText(name + " — Room 801")).toBeTruthy();
+});
