@@ -54,8 +54,8 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       zone: cfg.timezone,
     }).startOf("day");
     if (!selectedDay.isValid) fail(400, "Invalid historical transaction date");
-    if (selectedDay >= today)
-      fail(400, "Admin manual entries are only allowed for past dates");
+    if (selectedDay > today)
+      fail(400, "Admin manual entries cannot use a future date");
 
     const customer = await tx.customer.findUnique({
       where: { id: data.customerId },
@@ -74,8 +74,12 @@ historicalOrders.post("/historical", admin, async (req, res) => {
     if (total.gt("9999999999.99"))
       fail(400, "Order total exceeds the supported limit");
 
-    // Noon avoids a date rolling backward or forward when displayed in the shop zone.
-    const historicalAt = selectedDay.plus({ hours: 12 });
+    // Past entries use midday for stable calendar attribution. Today's manual
+    // entries use the actual current instant; noon may not have occurred yet.
+    const isToday = selectedDay.hasSame(today, "day");
+    const historicalAt = isToday
+      ? DateTime.now().setZone(cfg.timezone)
+      : selectedDay.plus({ hours: 12 });
     const turnaroundHours = lines.every((l) => l.express)
       ? cfg.expressHours
       : cfg.regularHours;
@@ -89,7 +93,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       ...(newStatus === "WASHING" && data.washingMachine
         ? { washingMachine: data.washingMachine }
         : {}),
-      createdAt: historicalAt.plus({ minutes: index }).toJSDate(),
+      createdAt: (isToday ? historicalAt : historicalAt.plus({ minutes: index })).toJSDate(),
     }));
 
     const number =
@@ -115,7 +119,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
         estimatedTo: estimatedTo.toJSDate(),
         claimedAt:
           data.status === "CLAIMED"
-            ? historicalAt.plus({ minutes: stageIndex }).toJSDate()
+            ? (isToday ? historicalAt : historicalAt.plus({ minutes: stageIndex })).toJSDate()
             : null,
         createdAt: historicalAt.toJSDate(),
         items: { create: lines },
