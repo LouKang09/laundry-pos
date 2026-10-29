@@ -5,6 +5,7 @@ import { cash } from "./ui";
 const METHODS = [
   { value: "CASH", icon: "₱", title: "Cash", note: "Paid in cash" },
   { value: "GCASH", icon: "G", title: "GCash", note: "Reference + optional proof" },
+  { value: "OTHERS", icon: "▦", title: "Others", note: "Maya, MariBank, GoTyme, BPI" },
   { value: "UNPAID", icon: "⌛", title: "Pay at Pickup", note: "Save as unpaid" },
 ];
 
@@ -53,12 +54,28 @@ async function prepareReceipt(file) {
   return result;
 }
 
-export function paymentPayload(method, reference, receiptDataUrl) {
+export const OTHER_PROVIDERS = [
+  { value: "MAYA", label: "Maya" },
+  { value: "MARIBANK", label: "MariBank" },
+  { value: "GOTYME", label: "GoTyme" },
+  { value: "BPI", label: "BPI" },
+];
+export function paymentLabel(method, provider) {
+  if (method === "OTHERS") return OTHER_PROVIDERS.find(p=>p.value===provider)?.label || "Others";
+  return method === "GCASH" ? "GCash" : method === "UNPAID" ? "Pay at Pickup" : "Cash";
+}
+export function validPaymentSelection(method, reference, provider) {
+  return method === "UNPAID" || method === "CASH" ||
+    ((method === "GCASH" || (method === "OTHERS" && OTHER_PROVIDERS.some(p=>p.value===provider))) &&
+      String(reference || "").trim().length >= 3);
+}
+export function paymentPayload(method, reference, receiptDataUrl, provider = "MAYA") {
   if (method === "UNPAID") return undefined;
   return {
     method,
-    ...(method === "GCASH" ? { reference: reference.trim() } : {}),
-    ...(method === "GCASH" && receiptDataUrl ? { receiptDataUrl } : {}),
+    ...(method === "OTHERS" ? { provider } : {}),
+    ...(method !== "CASH" ? { reference: reference.trim() } : {}),
+    ...(method !== "CASH" && receiptDataUrl ? { receiptDataUrl } : {}),
   };
 }
 
@@ -67,6 +84,8 @@ export function PaymentMethodPicker({
   setMethod,
   reference,
   setReference,
+  provider = "MAYA",
+  setProvider = () => {},
   receiptDataUrl,
   setReceiptDataUrl,
   allowUnpaid = true,
@@ -89,7 +108,7 @@ export function PaymentMethodPicker({
 
   return (
     <>
-      <div className={"water-payment-methods " + (!allowUnpaid ? "two" : "")}>
+      <div className={"water-payment-methods " + (!allowUnpaid ? "three" : "")}>
         {METHODS.filter((item) => allowUnpaid || item.value !== "UNPAID").map(
           (item) => (
             <button
@@ -126,8 +145,14 @@ export function PaymentMethodPicker({
           </p>
         )}
 
-        {method === "GCASH" && (
+        {(method === "GCASH" || method === "OTHERS") && (
           <>
+            {method === "OTHERS" && <label className="water-payment-field">
+              <span>Payment provider</span>
+              <select aria-label="Payment provider" value={provider} onChange={e=>setProvider(e.target.value)}>
+                {OTHER_PROVIDERS.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </label>}
             <div
               className={
                 "water-receipt-upload " +
@@ -135,7 +160,7 @@ export function PaymentMethodPicker({
               }
             >
               <div className="water-receipt-upload-head">
-                <strong>Add GCash receipt proof</strong>
+                <strong>Add {paymentLabel(method, provider)} receipt proof</strong>
                 <small>
                   Optional. Take a photo of the customer&apos;s phone or upload
                   a screenshot for transaction reference.
@@ -190,7 +215,7 @@ export function PaymentMethodPicker({
                 <img
                   className="water-receipt-preview"
                   src={receiptDataUrl}
-                  alt="GCash receipt preview"
+                  alt={paymentLabel(method, provider) + " receipt preview"}
                 />
                 <button
                   type="button"
@@ -203,16 +228,16 @@ export function PaymentMethodPicker({
             )}
 
             <label className="water-payment-field">
-              <span>GCash reference number</span>
+              <span>{paymentLabel(method, provider)} reference number</span>
               <input
                 autoComplete="off"
-                inputMode="numeric"
-                placeholder="Enter the GCash reference"
+                inputMode={method === "GCASH" ? "numeric" : "text"}
+                placeholder={"Enter the " + paymentLabel(method, provider) + " reference"}
                 value={reference}
                 onChange={(event) => setReference(event.target.value)}
               />
               <small>
-                Required. The receipt photo is optional supporting proof.
+                Required (at least 3 characters). The receipt photo is optional supporting proof.
               </small>
             </label>
           </>
@@ -230,6 +255,8 @@ export function PaymentDialog({
   setMethod,
   reference,
   setReference,
+  provider = "MAYA",
+  setProvider = () => {},
   receiptDataUrl,
   setReceiptDataUrl,
   allowUnpaid = true,
@@ -238,14 +265,11 @@ export function PaymentDialog({
   onConfirm,
 }) {
   if (!open) return null;
-  const invalidGcash =
-    method === "GCASH" && String(reference || "").trim().length < 4;
+  const invalidPayment = !validPaymentSelection(method, reference, provider);
   const confirmLabel =
     method === "UNPAID"
       ? "Save as Unpaid"
-      : method === "GCASH"
-        ? "Confirm GCash Payment"
-        : "Confirm Cash Payment";
+      : "Confirm " + paymentLabel(method, provider) + " Payment";
 
   return (
     <div className="water-payment-overlay" role="presentation">
@@ -275,6 +299,8 @@ export function PaymentDialog({
           setMethod={setMethod}
           reference={reference}
           setReference={setReference}
+          provider={provider}
+          setProvider={setProvider}
           receiptDataUrl={receiptDataUrl}
           setReceiptDataUrl={setReceiptDataUrl}
           allowUnpaid={allowUnpaid}
@@ -288,7 +314,7 @@ export function PaymentDialog({
           <button
             type="button"
             className="primary full"
-            disabled={busy || invalidGcash}
+            disabled={busy || invalidPayment}
             onClick={onConfirm}
           >
             {busy ? "Processing…" : confirmLabel}
