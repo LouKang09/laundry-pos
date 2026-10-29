@@ -3,6 +3,7 @@ import { ArrowRight, Plus, Shirt, Trash2, Waves, Wind } from "lucide-react";
 import Decimal from "decimal.js";
 import { post } from "./api";
 import { CustomerForm } from "./operations";
+import { customerDisplayName } from "./customer-display";
 import { useApp } from "./context";
 import {
   Empty,
@@ -19,10 +20,20 @@ import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { AddonsPicker } from "./addons-picker";
 import { PaymentMethodPicker, paymentPayload, validPaymentSelection } from "./payment-flow";
 
-const previousBusinessDay = () =>
-  new Date(Date.now() - 86400000).toLocaleDateString("en-CA", {
+const businessToday = () => {
+  const fields = new Intl.DateTimeFormat("en-CA", {
     timeZone: window.businessZone || "Asia/Manila",
-  });
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const date = Object.fromEntries(fields.map(({type,value})=>[type,value]));
+  return `${date.year}-${date.month}-${date.day}`;
+};
+const previousBusinessDay = () => {
+  const [year,month,day] = businessToday().split("-").map(Number);
+  return new Date(Date.UTC(year,month-1,day-1)).toISOString().slice(0,10);
+};
 
 const stages = ["RECEIVED", "WASHING", "DRYING", "FOLDING", "READY", "CLAIMED"];
 
@@ -99,10 +110,10 @@ export function AdminHistoricalOrder() {
         <span className="muted">Add past transactions with separate, individually priced loads for each service.</span>
       </PageHead>
       <section className="panel" style={{ marginBottom: 16 }}>
-        <strong>Past dates only</strong>
+        <strong>Past dates and today</strong>
         <p className="muted" style={{ marginBottom: 0 }}>
-          Historical entries use the same full-load and half-load pricing as the live POS.
-          They do not deduct today&apos;s inventory.
+          Manual entries can use any past date or today's date (Philippine time).
+          They use the same load pricing as the live POS and do not deduct live inventory.
         </p>
       </section>
       <ErrorBox message={error || serviceError || addonError || customerError} />
@@ -112,7 +123,7 @@ export function AdminHistoricalOrder() {
           <section className="panel">
             <div className="section-title"><h2><span className="step">1</span> Historical record</h2></div>
             <Field label="Transaction date">
-              <input type="date" value={historicalDate} max={previousBusinessDay()} required onChange={(e) => setHistoricalDate(e.target.value)} />
+              <input type="date" value={historicalDate} max={businessToday()} required onChange={(e) => setHistoricalDate(e.target.value)} />
             </Field>
             <Field label="Current / final stage">
               <select
@@ -136,16 +147,16 @@ export function AdminHistoricalOrder() {
             {customer ? (
               <div className="selected-customer">
                 <span className="avatar">{customer.name[0]}</span>
-                <div><strong>{customer.name}</strong><small>{customer.phone}{customer.roomUnit ? " · " + customer.roomUnit : ""}</small></div>
+                <div><strong>{customerDisplayName(customer)}</strong><small>{customer.phone || "No phone number"}{!customer.roomUnit ? " · Room / unit not set" : ""}</small></div>
                 <button className="secondary" onClick={() => setCustomer(null)}>Change</button>
               </div>
             ) : (
               <>
-                <SearchBox value={q} onChange={setQ} placeholder="Search customer name or phone" />
+                <SearchBox value={q} onChange={setQ} placeholder="Search name, phone, room or unit" />
                 <div className="customer-results">
                   {customers?.rows.slice(0, 5).map((item) => (
                     <button key={item.id} onClick={() => setCustomer(item)}>
-                      <span><strong>{item.name}</strong><small>{item.phone}</small></span><Plus size={17} />
+                      <span><strong>{customerDisplayName(item)}</strong><small>{item.phone || "No phone number"}{!item.roomUnit ? " · Room / unit not set" : ""}</small></span><Plus size={17} />
                     </button>
                   ))}
                   {customers && !customers.rows.length && <Empty>No customers found. Register a new customer.</Empty>}
