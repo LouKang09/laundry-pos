@@ -189,7 +189,7 @@ function Shell() {
     [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const onLogin = (data) => {
-    setCsrf(data.csrfToken);
+    setCsrf(data.csrfToken, data.user.id);
     setUser(data.user);
   };
   useEffect(() => {
