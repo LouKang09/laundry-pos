@@ -14,6 +14,7 @@ import { staffReceipts } from "./staff-receipts.js";
 import { servicePricing } from "./service-pricing.js";
 import { management } from "./admin.js";
 import { reporting } from "./reports.js";
+import { salesAnalytics } from "./sales-analytics.js";
 import { z, customerSchema, pageNumber } from "./validation.js";
 export const app = express();
 app.disable("x-powered-by");
@@ -220,6 +221,7 @@ app.use("/api/orders", orders);
 app.use("/api/admin", servicePricing);
 app.use("/api/admin", management);
 app.use("/api", reporting);
+app.use("/api", salesAnalytics);
 app.use("/api", (req, res) =>
   res.status(404).json({ error: "Endpoint not found" }),
 );
