@@ -3,9 +3,9 @@ import { Camera, ImagePlus } from "lucide-react";
 import { cash } from "./ui";
 
 const METHODS = [
-  { value: "CASH", icon: "₱", title: "Cash", note: "Paid in cash" },
-  { value: "GCASH", icon: "G", title: "GCash", note: "Reference + optional proof" },
-  { value: "OTHERS", icon: "▦", title: "Others", note: "Maya, MariBank, GoTyme, BPI" },
+  { value: "CASH", icon: "₱", title: "Cash", note: "Pay in cash" },
+  { value: "GCASH", icon: "G", title: "GCash", note: "QR or transfer" },
+  { value: "OTHERS", icon: "▦", title: "Others", note: "Maya or bank transfer" },
   { value: "UNPAID", icon: "⌛", title: "Pay at Pickup", note: "Save as unpaid" },
 ];
 
@@ -121,7 +121,7 @@ export function PaymentMethodPicker({
               onClick={() => setMethod(item.value)}
             >
               <span className="water-payment-icon">{item.icon}</span>
-              <span>
+              <span className="water-payment-copy">
                 <strong>{item.title}</strong>
                 <small>{item.note}</small>
               </span>

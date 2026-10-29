@@ -240,11 +240,16 @@ export function AdminHistoricalOrder() {
               </div>
             </div>
             {status === "CLAIMED" && (
-              <div className="water-payment-info water-payment-info-unpaid">
-                <p>Pay at Pickup is available for orders that have not been claimed. Historical orders default to Claimed, so unpaid payment is hidden until the stage is changed.</p>
+              <div className="historical-payment-guide">
+                <div className="historical-payment-guide-copy">
+                  <strong>Collect payment at pickup instead?</strong>
+                  <p>
+                    Switch this historical order to Ready to save it as unpaid.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="secondary"
+                  className="secondary historical-payment-guide-action"
                   onClick={() => {
                     setStatus("READY");
                     setPayment("UNPAID");
