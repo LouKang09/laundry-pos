@@ -55,6 +55,7 @@ export function AdminHistoricalOrder() {
     [receiptDataUrl, setReceiptDataUrl] = useState(""),
     [washingMachine, setWashingMachine] = useState(""),
     [busy, setBusy] = useState(false),
+    [scanBusy, setScanBusy] = useState(false),
     [error, setError] = useState(""),
     [saved, setSaved] = useState(null),
     [requestKey, setRequestKey] = useState(crypto.randomUUID());
@@ -295,13 +296,14 @@ export function AdminHistoricalOrder() {
               receiptDataUrl={receiptDataUrl}
               setReceiptDataUrl={setReceiptDataUrl}
               allowUnpaid={status !== "CLAIMED"}
+              onScanChange={setScanBusy}
             />
           </div>
           {claimedWithoutPayment && <ErrorBox message="Claimed historical transactions must be marked paid." />}
 
           <button
             className="primary full historical-save-button"
-            disabled={busy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider)}
+            disabled={busy || scanBusy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider)}
             onClick={async () => {
               setBusy(true);
               setError("");
