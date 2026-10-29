@@ -26,7 +26,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'"],
         // OCR is loaded lazily, using the same Tesseract.js provider as Water POS.
         // The receipt image never leaves the device during recognition.
-        scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", "https://cdn.jsdelivr.net"],
         workerSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net"],
         connectSrc: ["'self'", "https://cdn.jsdelivr.net", "https://tessdata.projectnaptha.com", "https://*.githubusercontent.com"],
       },
