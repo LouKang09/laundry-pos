@@ -124,18 +124,43 @@ async function getWorker() {
 async function renderForOcr(dataUrl, enhanced=false) {
   const img = new Image();
   img.src = dataUrl;
-  await img.decode();
-  const max=enhanced?1450:1280;
-  const scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  if(typeof img.decode==="function") await img.decode();
+  else await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;});
+  const sourceWidth=img.naturalWidth,sourceHeight=img.naturalHeight;
+  // Like Water POS: the second pass enhances a cropped area for phone-to-phone
+  // camera shots where LCD glare / moire makes the text hard to recognize.
+  const x=enhanced?Math.floor(sourceWidth*0.02):0;
+  const y=enhanced?Math.floor(sourceHeight*0.06):0;
+  const width=enhanced?Math.max(1,Math.floor(sourceWidth*0.96)):sourceWidth;
+  const height=enhanced?Math.max(1,Math.floor(sourceHeight*0.88)):sourceHeight;
+  const target=enhanced?1450:1280;
+  const scale=Math.max(0.3,Math.min(2,target/Math.max(width,height)));
   const canvas=document.createElement("canvas");
-  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
-  canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
-  const context=canvas.getContext("2d",{willReadFrequently:enhanced});
+  canvas.width=Math.max(1,Math.round(width*scale));
+  canvas.height=Math.max(1,Math.round(height*scale));
+  const context=canvas.getContext("2d",{alpha:false,willReadFrequently:enhanced});
   if(!context) throw new Error("Image processing is unavailable on this device.");
   context.fillStyle="#fff";
   context.fillRect(0,0,canvas.width,canvas.height);
-  context.filter=enhanced?"contrast(1.8) grayscale(1) brightness(1.15)":"contrast(1.12) grayscale(1)";
-  context.drawImage(img,0,0,canvas.width,canvas.height);
+  context.imageSmoothingEnabled=true;
+  context.imageSmoothingQuality="high";
+  if("filter" in context) context.filter=enhanced?"grayscale(1) contrast(1.35) brightness(1.07)":"grayscale(1) contrast(1.2)";
+  context.drawImage(img,x,y,width,height,0,0,canvas.width,canvas.height);
+  if(enhanced){
+    const bitmap=context.getImageData(0,0,canvas.width,canvas.height);
+    const pixels=bitmap.data;
+    let brightness=0,seen=0;
+    for(let i=0;i<pixels.length;i+=16){
+      brightness+=Math.round(pixels[i]*0.299+pixels[i+1]*0.587+pixels[i+2]*0.114);seen++;
+    }
+    const threshold=Math.max(150,Math.min(224,Math.round(brightness/Math.max(1,seen)*0.98)));
+    for(let i=0;i<pixels.length;i+=4){
+      const gray=Math.round(pixels[i]*0.299+pixels[i+1]*0.587+pixels[i+2]*0.114);
+      const value=gray<threshold?0:255;
+      pixels[i]=value;pixels[i+1]=value;pixels[i+2]=value;pixels[i+3]=255;
+    }
+    context.putImageData(bitmap,0,0);
+  }
   return canvas;
 }
 
