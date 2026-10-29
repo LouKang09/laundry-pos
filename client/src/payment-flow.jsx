@@ -33,8 +33,8 @@ function loadImage(src) {
 
 async function prepareReceipt(file) {
   if (!file) return "";
-  if (!/^image\/(jpeg|png|webp)$/i.test(file.type))
-    throw new Error("Use a JPG, PNG, or WebP payment receipt");
+  if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type))
+    throw new Error("Use a JPG, PNG, WebP, or device-supported HEIC payment receipt");
   if (file.size > 8 * 1024 * 1024)
     throw new Error("Receipt image is too large. Use an image under 8 MB.");
 
@@ -322,6 +322,7 @@ export function PaymentMethodPicker({
                 inputMode={method === "GCASH" ? "numeric" : "text"}
                 placeholder={"Enter the " + paymentLabel(method, provider) + " reference"}
                 value={reference}
+                disabled={imageBusy}
                 onChange={(event) => setReference(event.target.value)}
               />
               <small>
