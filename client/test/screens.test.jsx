@@ -7,7 +7,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import {randomBytes} from 'node:crypto';
 import {Context} from '../src/context';
-import {setCsrf} from '../src/api';
+import {setCsrf,post} from '../src/api';
 import {Customers} from '../src/operations';
 import {Dashboard,NewOrder,OrderList} from '../src/workflow';
 import {PosOrder} from '../src/pos-order-loads';
@@ -112,4 +112,15 @@ test('admin manual entry offers Pay at Pickup for an unclaimed historical order'
   await ui.click(screen.getByRole('button', {name: /Pay at Pickup · Mark Ready/}));
   expect(screen.getByRole('button', {name: /Pay at Pickup Save as unpaid/})).toBeTruthy();
   expect(screen.getByText(/The order will be saved as unpaid/)).toBeTruthy();
+});
+
+test("stale CSRF transparently refreshes without creating duplicate orders or logging staff out", async () => {
+  activeAgent=staffAgent;
+  setCsrf("stale-in-memory-token",staffUser.id);
+  const created=await post("/customers",{
+    name:prefix+" Refreshed Token",phone:"09123456789",
+  });
+  expect(created.name).toBe(prefix+" Refreshed Token");
+  const rows=(await staffAgent.get("/api/customers?q="+encodeURIComponent(prefix+" Refreshed Token"))).body.rows;
+  expect(rows.filter(row=>row.id===created.id)).toHaveLength(1);
 });

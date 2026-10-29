@@ -746,3 +746,51 @@ test("29 custom tier sizing, CAPS add-ons, locked order prices and historical st
   assert.equal(historic.total, "34");
   assert.equal((await db.inventoryItem.findUnique({ where: { id: additive.id } })).stock.toString(), "8");
 });
+
+test("30 explicit stale CSRF response blocks writes while valid session survives", async () => {
+  const blocked = await staff.post("/api/customers").set("x-csrf-token","old-token")
+    .send({name:prefix+" CSRF blocked",phone:"09123456789"}).expect(403);
+  assert.equal(blocked.body.code,"CSRF_MISMATCH");
+  const session = await staff.get("/api/auth/me").expect(200);
+  assert.equal(session.body.csrfToken,sc);
+  const created = await call(staff,sc,"post","/customers",{
+    name:prefix+" CSRF recovered",phone:"09123456789",
+  }).expect(201);
+  assert.equal(created.body.name,prefix+" CSRF recovered");
+});
+
+test("31 Other payment providers, receipt snapshots, and strict provider validation", async () => {
+  for (const provider of ["MAYA","MARIBANK","GOTYME","BPI"]) {
+    const ref = prefix+"-"+provider+"-"+crypto.randomBytes(4).toString("hex");
+    const response = await call(staff,sc,"post","/orders",{
+      ...orderBody([{serviceId:piece.id,actualQuantity:"1",express:false}]),
+      payment:{method:"OTHERS",provider,reference:ref},
+    }).expect(201);
+    assert.equal(response.body.paymentStatus,"PAID");
+    assert.equal(response.body.payment.method,"OTHERS");
+    assert.equal(response.body.payment.provider,provider);
+    assert.equal(response.body.payment.reference,ref);
+    const detail = await admin.get("/api/orders/"+response.body.id).expect(200);
+    assert.equal(detail.body.payment.provider,provider);
+  }
+  await call(staff,sc,"post","/orders",{
+    ...orderBody([{serviceId:piece.id,actualQuantity:"1",express:false}]),
+    payment:{method:"OTHERS",reference:prefix+"-missing-provider"},
+  }).expect(400);
+  await call(staff,sc,"post","/orders",{
+    ...orderBody([{serviceId:piece.id,actualQuantity:"1",express:false}]),
+    payment:{method:"GCASH",provider:"MAYA",reference:prefix+"-bad-provider"},
+  }).expect(400);
+  const gcash = await call(staff,sc,"post","/orders",{
+    ...orderBody([{serviceId:piece.id,actualQuantity:"1",express:false}]),
+    payment:{method:"GCASH",reference:crypto.randomBytes(4).toString("hex").slice(0,3)},
+  }).expect(201);
+  assert.equal(gcash.body.payment.method,"GCASH");
+  const date = DateTime.now().setZone("Asia/Manila").minus({days:2}).toISODate();
+  const historical = await call(admin,ac,"post","/orders/historical",{
+    requestKey:crypto.randomUUID(),historicalDate:date,customerId:customer.id,
+    status:"CLAIMED",items:[{serviceId:piece.id,actualQuantity:"1",express:false}],
+    payment:{method:"OTHERS",provider:"BPI",reference:prefix+"-BPI-HIST"},
+  }).expect(201);
+  assert.equal(historical.body.payment.provider,"BPI");
+});
