@@ -453,6 +453,67 @@ orders.delete("/:id", admin, async (req, res) => {
   });
   res.json(result);
 });
+// Correct the recorded tender type in place. This is an audited metadata correction,
+// not an additional collection, refund or change to the order total.
+orders.put("/:id/payment", async (req, res) => {
+  const payment = paymentSchema.parse(req.body);
+  if (req.user.role !== "ADMIN" && req.user.role !== "LAUNDRY_STAFF")
+    fail(403, "Only authorized POS users can correct payment methods");
+  const result = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt || order.status === "CANCELLED")
+      fail(409, "Deleted or cancelled transactions cannot be changed");
+    if (order.paymentStatus !== "PAID" || !order.payment)
+      fail(409, "This order is unpaid. Use Receive Payment instead.");
+    if (order.status === "CLAIMED" && req.user.role !== "ADMIN")
+      fail(403, "Only Admin can correct payment methods on completed transactions");
+
+    const before = order.payment;
+    const newProvider = payment.method === "OTHERS" ? payment.provider : null;
+    const newReference = payment.method === "CASH" ? null : payment.reference;
+    const changed = before.method !== payment.method ||
+      (before.provider || null) !== newProvider ||
+      (before.reference || null) !== newReference;
+    const newReceipt = payment.receiptDataUrl
+      ? decodePaymentReceipt(payment.receiptDataUrl)
+      : null;
+    if (!changed && !newReceipt)
+      fail(400, "Choose a different payment method or update the receipt proof");
+
+    // When changing payment details, old proof must not be presented as
+    // evidence for the replacement method/reference.
+    const keepReceipt = !changed && !newReceipt;
+    await tx.payment.update({
+      where: { orderId: order.id },
+      data: {
+        method: payment.method,
+        provider: newProvider,
+        reference: newReference,
+        receiptMime: newReceipt?.receiptMime ?? (keepReceipt ? before.receiptMime : null),
+        receiptImage: newReceipt?.receiptImage ?? (keepReceipt ? undefined : null),
+      },
+    });
+    await audit(tx, req.user.id, "PAYMENT_METHOD_CORRECTED", "Order", order.id, {
+      orderNumber: order.orderNumber,
+      before: {
+        method: before.method,
+        provider: before.provider || null,
+        reference: before.reference || null,
+      },
+      after: {
+        method: payment.method,
+        provider: newProvider,
+        reference: newReference,
+      },
+      amount: order.total.toString(),
+      receiptProofReplaced: !!newReceipt,
+      receiptProofCleared: changed && !newReceipt && !!before.receiptMime,
+    });
+    return getOrder(tx, order.id);
+  });
+  res.json(result);
+});
+
 orders.post("/:id/payment", async (req, res) => {
   const payment = paymentSchema.parse(req.body);
   res.json(
