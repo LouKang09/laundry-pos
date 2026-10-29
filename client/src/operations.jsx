@@ -20,6 +20,7 @@ import Decimal from "decimal.js";
 import { api, post, put } from "./api";
 import { useApp } from "./context";
 import { PaymentDialog, paymentPayload, paymentLabel } from "./payment-flow";
+import { customerDisplayName } from "./customer-display";
 import { PosReceiptPrint } from "./pos-receipt-print";
 import { OFFICIAL_LOGO } from "./brand";
 import {
@@ -289,7 +290,7 @@ export function NewOrder() {
               <div className="selected-customer">
                 <span className="avatar">{customer.name[0]}</span>
                 <div>
-                  <strong>{customer.name}</strong>
+                  <strong>{customerDisplayName(customer)}</strong>
                   <small>{customer.phone}</small>
                 </div>
                 <button className="secondary" onClick={() => setCustomer(null)}>
@@ -301,13 +302,13 @@ export function NewOrder() {
                 <SearchBox
                   value={q}
                   onChange={setQ}
-                  placeholder="Search customer name or phone"
+                  placeholder="Search name, phone, room or unit"
                 />
                 <div className="customer-results">
                   {customers?.rows.slice(0, 5).map((c) => (
                     <button key={c.id} onClick={() => setCustomer(c)}>
                       <span>
-                        <strong>{c.name}</strong>
+                        <strong>{customerDisplayName(c)}</strong>
                         <small>{c.phone}{c.roomUnit ? " · " + c.roomUnit : ""}</small>
                       </span>
                       <Plus size={17} />
@@ -734,6 +735,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [provider, setProvider] = useState("MAYA"),
     [paymentReceiptDataUrl, setPaymentReceiptDataUrl] = useState(""),
     [paymentOpen, setPaymentOpen] = useState(false),
+     [paymentEditing, setPaymentEditing] = useState(false),
     [receipt, setReceipt] = useState(null),
     [reason, setReason] = useState(""),
     [washingMachine, setWashingMachine] = useState(""),
@@ -845,6 +847,31 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 Total <strong>{cash(o.total)}</strong>
               </p>
             </div>
+            {!o.deletedAt && o.status !== "CANCELLED" && o.paymentStatus === "PAID" && (admin || o.status !== "CLAIMED") && (
+              <div className="action-panel">
+                <h3>Recorded payment</h3>
+                <p className="muted">
+                  {paymentLabel(o.payment?.method, o.payment?.provider)}
+                  {o.payment?.reference ? " · Ref: " + o.payment.reference : ""}. Correct the method without charging twice or changing the total.
+                </p>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setPaymentEditing(true);
+                    setMethod(o.payment.method);
+                    setProvider(o.payment.provider || "MAYA");
+                    setReference(o.payment.reference || "");
+                    setPaymentReceiptDataUrl("");
+                    setPaymentOpen(true);
+                  }}
+                >
+                  <Edit3 size={17} /> Change payment method
+                </button>
+                {o.status === "CLAIMED" && <p className="muted small">Admin correction for completed transactions. Earlier details remain in the audit trail.</p>}
+              </div>
+            )}
             {!o.deletedAt && o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
               <div className="action-panel">
                 {o.paymentStatus === "UNPAID" && (
@@ -856,7 +883,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     <button
                       className="primary"
                       disabled={busy}
-                      onClick={() => setPaymentOpen(true)}
+                      onClick={() => { setPaymentEditing(false); setMethod("CASH"); setReference(""); setProvider("MAYA"); setPaymentReceiptDataUrl(""); setPaymentOpen(true); }}
                     >
                       Payment · {cash(o.total)}
                     </button>
@@ -1038,7 +1065,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
       {editing && o && <TransactionEditor order={o} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); setRev((v) => v + 1); onChanged(); notify("Transaction updated"); }} />}
       <PaymentDialog
         open={paymentOpen}
-        onClose={() => !busy && setPaymentOpen(false)}
+        onClose={() => { if (!busy) { setPaymentOpen(false); setPaymentEditing(false); } }}
         total={o?.total || 0}
         method={method}
         setMethod={setMethod}
@@ -1050,19 +1077,23 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
         setReceiptDataUrl={setPaymentReceiptDataUrl}
         allowUnpaid={false}
         busy={busy}
-        title="Settle unpaid order"
+        title={paymentEditing ? "Correct payment method" : "Settle unpaid order"}
         onConfirm={() =>
           action(async () => {
-            await post(
-              "/orders/" + id + "/payment",
-              paymentPayload(method, reference, paymentReceiptDataUrl, provider),
-            );
+            const payload = paymentPayload(method, reference, paymentReceiptDataUrl, provider);
+            if (paymentEditing) {
+              await put("/orders/" + id + "/payment", payload);
+              notify("Payment method corrected; the change is in transaction history.");
+            } else {
+              await post("/orders/" + id + "/payment", payload);
+              notify("Payment received");
+            }
             setPaymentOpen(false);
+            setPaymentEditing(false);
             setReference("");
             setProvider("MAYA");
             setPaymentReceiptDataUrl("");
             setMethod("CASH");
-            notify("Payment received");
           })
         }
       />
@@ -1178,7 +1209,7 @@ export function Customers() {
             <Table headers={["Customer", "Phone", "Room / Unit", "Orders", "Registered", ""]}>
               {data.rows.map((c) => (
                 <tr key={c.id}>
-                  <td><strong>{c.name}</strong></td>
+                  <td><strong>{customerDisplayName(c)}</strong></td>
                   <td>{c.phone}</td>
                   <td>{c.roomUnit || "—"}</td>
                   <td>{c._count.orders}</td>
