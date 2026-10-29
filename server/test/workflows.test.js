@@ -806,3 +806,67 @@ test("32 served app shell never caches HTML and exposes active bundle fingerprin
   const root=await request(app).get("/").expect(200);
   assert.match(root.headers["cache-control"]||"",/no-store/);
 });
+
+
+test("33 payment corrections switch methods without collecting twice, including completed orders", async () => {
+  const created = (await call(staff, sc, "post", "/orders", {
+    ...orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }]),
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  const originalTotal = created.total;
+  const newReference = prefix + "-CORRECT-GCASH";
+  let result = await call(staff, sc, "put", "/orders/" + created.id + "/payment", {
+    method: "GCASH", reference: newReference,
+  }).expect(200);
+  assert.equal(result.body.payment.method, "GCASH");
+  assert.equal(result.body.payment.reference, newReference);
+  assert.equal(result.body.total, originalTotal);
+  result = await call(staff, sc, "put", "/orders/" + created.id + "/payment", {
+    method: "OTHERS", provider: "MAYA", reference: prefix + "-CORRECT-MAYA",
+  }).expect(200);
+  assert.equal(result.body.payment.provider, "MAYA");
+  result = await call(staff, sc, "put", "/orders/" + created.id + "/payment", {
+    method: "CASH",
+  }).expect(200);
+  assert.equal(result.body.payment.method, "CASH");
+  assert.equal(result.body.payment.reference, null);
+  assert.equal(result.body.payment.provider, null);
+  assert.equal(await db.payment.count({ where: { orderId: created.id } }), 1);
+  assert.equal(result.body.total, originalTotal);
+  await call(staff, sc, "put", "/orders/" + created.id + "/payment", {
+    method: "GCASH", reference: "x",
+  }).expect(400);
+  await call(staff, sc, "put", "/orders/" + created.id + "/payment", {
+    method: "CASH",
+  }).expect(400);
+
+  // Claimed is a completed transaction: only Admin can correct it.
+  await call(staff, sc, "put", "/orders/" + unpaid.id + "/payment", {
+    method: "GCASH", reference: prefix + "-CLAIMED-CORRECTION",
+  }).expect(403);
+  result = await call(admin, ac, "put", "/orders/" + unpaid.id + "/payment", {
+    method: "GCASH", reference: prefix + "-CLAIMED-CORRECTION",
+  }).expect(200);
+  assert.equal(result.body.status, "CLAIMED");
+  assert.equal(result.body.paymentStatus, "PAID");
+  assert.equal(result.body.payment.method, "GCASH");
+  assert.equal(await db.payment.count({ where: { orderId: unpaid.id } }), 1);
+  const history = await admin.get("/api/orders/" + unpaid.id).expect(200);
+  const edit = history.body.transactionHistory.find((h) => h.action === "PAYMENT_METHOD_CORRECTED");
+  assert.equal(edit.metadata.before.method, "CASH");
+  assert.equal(edit.metadata.after.method, "GCASH");
+
+  const notPaid = (await call(staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }])
+  ).expect(201)).body;
+  await call(admin, ac, "put", "/orders/" + notPaid.id + "/payment", {
+    method: "CASH",
+  }).expect(409);
+
+  // Selection and lookup remain differentiable for identically named residents.
+  await call(staff, sc, "put", "/customers/" + customer.id, {
+    name: customer.name, phone: customer.phone, roomUnit: "Room 801",
+  }).expect(200);
+  const lookup = await staff.get("/api/customers?q=801").expect(200);
+  assert(lookup.body.rows.some((row) => row.id === customer.id && row.roomUnit === "Room 801"));
+});
