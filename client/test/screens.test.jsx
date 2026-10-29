@@ -177,3 +177,25 @@ test("historical payment cards have grouped labels and concise pickup guidance",
   expect(document.querySelectorAll('.water-payment-copy').length).toBeGreaterThanOrEqual(3);
   expect(screen.getByRole('button',{name:/Pay at Pickup · Mark Ready/})).toBeTruthy();
 });
+
+test("manual transaction review has its own full-width responsive layout and uncramped sections",async()=>{
+  const ui=userEvent.setup();
+  mount(<AdminHistoricalOrder/>);
+  await screen.findByRole('button',{name:/Wash & Fold/});
+  expect(document.querySelector('.historical-pos-grid')).toBeTruthy();
+  expect(document.querySelector('.historical-summary')).toBeTruthy();
+  expect(document.querySelector('.historical-summary .historical-summary-section')).toBeTruthy();
+  expect(document.querySelector('.historical-summary .addon-picker')).toBeTruthy();
+  expect(document.querySelector('.historical-summary .historical-payment-section')).toBeTruthy();
+  expect(document.querySelector('.historical-summary .historical-summary-total')).toBeTruthy();
+  await ui.click(screen.getByRole('button',{name:/Wash & Fold/}));
+  expect(screen.getAllByLabelText('Actual kg')).toHaveLength(1);
+  expect(screen.getByRole('button',{name:/Pay at Pickup · Mark Ready/})).toBeTruthy();
+});
+
+test("live POS order summary has dedicated responsive layout",async()=>{
+  mount(<PosOrder/>,staffUser,false);
+  await screen.findByRole('button',{name:/Wash & Fold/});
+  expect(document.querySelector('.live-pos-grid')).toBeTruthy();
+  expect(document.querySelector('.live-pos-grid .order-summary')).toBeTruthy();
+});
