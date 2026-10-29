@@ -48,7 +48,7 @@ async function refreshSecurityToken() {
 export async function api(path, options = {}) {
   let { res, data } = await send(path, options);
   // Retry only the explicit CSRF rejection: middleware blocks the first write.
-  if (res.status === 403 && data.code === "CSRF_MISMATCH" && !path.startsWith("/auth/")) {
+  if (res.status === 403 && data.code === "CSRF_MISMATCH" && path !== "/auth/login" && path !== "/auth/setup") {
     await refreshSecurityToken();
     ({ res, data } = await send(path, options));
   }
