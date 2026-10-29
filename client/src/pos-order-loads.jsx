@@ -3,6 +3,7 @@ import { ArrowRight, Plus, Shirt, Trash2, Waves, Wind } from "lucide-react";
 import Decimal from "decimal.js";
 import { post } from "./api";
 import { CustomerForm } from "./operations";
+import { customerDisplayName } from "./customer-display";
 import { useApp } from "./context";
 import {
   Empty,
@@ -121,18 +122,18 @@ export function PosOrder() {
               <div className="selected-customer">
                 <span className="avatar">{customer.name[0]}</span>
                 <div>
-                  <strong>{customer.name}</strong>
+                  <strong>{customerDisplayName(customer)}</strong>
                   <small>{customer.phone}{customer.roomUnit ? " · " + customer.roomUnit : ""}</small>
                 </div>
                 <button className="secondary" onClick={() => setCustomer(null)}>Change</button>
               </div>
             ) : (
               <>
-                <SearchBox value={q} onChange={setQ} placeholder="Search customer name or phone" />
+                <SearchBox value={q} onChange={setQ} placeholder="Search name, phone, room or unit" />
                 <div className="customer-results">
                   {customers?.rows.slice(0, 5).map((item) => (
                     <button key={item.id} onClick={() => setCustomer(item)}>
-                      <span><strong>{item.name}</strong><small>{item.phone}</small></span>
+                      <span><strong>{customerDisplayName(item)}</strong><small>{item.phone || "No phone number"}{item.roomUnit ? " · " + item.roomUnit : ""}</small></span>
                       <Plus size={17} />
                     </button>
                   ))}
