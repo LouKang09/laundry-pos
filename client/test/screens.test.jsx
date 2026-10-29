@@ -260,7 +260,7 @@ test("admin sales dashboard shows Water POS-style summary, selectable payment li
   const ui=userEvent.setup();
   mount(<Dashboard/>);
   expect(await screen.findByText("Sales & payment dashboard")).toBeTruthy();
-  expect(screen.getByText("Total Collected")).toBeTruthy();
+  expect(await screen.findByText("Total Collected")).toBeTruthy();
   expect(screen.getByText("Other Digital")).toBeTruthy();
   expect(screen.getByText("Net Collections")).toBeTruthy();
   expect(screen.getByText("Hourly Sales Trend")).toBeTruthy();
