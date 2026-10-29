@@ -7,7 +7,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import {randomBytes} from 'node:crypto';
 import {Context} from '../src/context';
-import {setCsrf,post} from '../src/api';
+import {setCsrf,post,put} from '../src/api';
 import {Customers} from '../src/operations';
 import {Dashboard,NewOrder,OrderList} from '../src/workflow';
 import {PosOrder} from '../src/pos-order-loads';
@@ -123,4 +123,57 @@ test("stale CSRF transparently refreshes without creating duplicate orders or lo
   expect(created.name).toBe(prefix+" Refreshed Token");
   const rows=(await staffAgent.get("/api/customers?q="+encodeURIComponent(prefix+" Refreshed Token"))).body.rows;
   expect(rows.filter(row=>row.id===created.id)).toHaveLength(1);
+});
+
+test("sitewide POST/PUT/historical saves preflight the current session after a stale token", async () => {
+  activeAgent=adminAgent;
+  const seen=[];
+  const priorFetch=globalThis.fetch;
+  globalThis.fetch=async(path,options={})=>{
+    const response=await priorFetch(path,options);
+    if(path.startsWith("/api/"))seen.push({path,method:options.method||"GET",status:response.status});
+    return response;
+  };
+  try {
+    setCsrf("old-admin-tab-csrf",user.id);
+    const customer=await post("/customers",{
+      name:prefix+" Multiple Action Customer",phone:"09123456789",
+    });
+    expect(customer.name).toContain("Multiple Action Customer");
+
+    // Recreate a stale tab immediately before a second, different operation.
+    setCsrf("outdated-before-edit",user.id);
+    const edited=await put("/customers/"+customer.id,{
+      name:prefix+" Edited Customer",phone:"09123456789",roomUnit:"305",
+    });
+    expect(edited.name).toContain("Edited Customer");
+
+    setCsrf("outdated-before-historical",user.id);
+    const services=(await adminAgent.get("/api/services")).body;
+    const service=services.find(s=>s.name==="Wash & Fold")||services[0];
+    expect(service).toBeTruthy();
+    const created=await post("/orders/historical",{
+      requestKey:crypto.randomUUID(),
+      historicalDate:new Date().toISOString().slice(0,10),
+      customerId:customer.id,
+      status:"CLAIMED",
+      items:[{serviceId:service.id,actualQuantity:"1",express:false}],
+      payment:{method:"CASH"},
+    });
+    expect(created.orderNumber).toMatch(/^L-/);
+    expect(seen.filter(call=>call.status===403)).toHaveLength(0);
+    expect(seen.filter(call=>call.path==="/api/auth/me")).toHaveLength(3);
+    expect(seen.filter(call=>call.method==="POST"||call.method==="PUT").every(call=>call.status<400)).toBe(true);
+  } finally {
+    globalThis.fetch=priorFetch;
+  }
+});
+
+test("historical payment cards have grouped labels and concise pickup guidance",async()=>{
+  mount(<AdminHistoricalOrder/>);
+  await screen.findByRole('button',{name:/Wash & Fold/});
+  expect(document.querySelector('.water-payment-inline')).toBeTruthy();
+  expect(document.querySelector('.historical-payment-guide')).toBeTruthy();
+  expect(document.querySelectorAll('.water-payment-copy').length).toBeGreaterThanOrEqual(3);
+  expect(screen.getByRole('button',{name:/Pay at Pickup · Mark Ready/})).toBeTruthy();
 });
