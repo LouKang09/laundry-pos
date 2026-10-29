@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { scanPaymentReference } from "./receipt-ocr";
 import { Camera, ImagePlus } from "lucide-react";
 import { cash } from "./ui";
 
@@ -90,21 +91,87 @@ export function PaymentMethodPicker({
   setReceiptDataUrl,
   allowUnpaid = true,
   isCorrection = false,
+  onScanChange = () => {},
 }) {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState("");
+  const [scanStatus, setScanStatus] = useState("");
+  const [scanResult, setScanResult] = useState("");
+  const jobToken = useRef(0);
+
+  useEffect(() => () => {
+    jobToken.current += 1;
+    onScanChange(false);
+  }, [onScanChange]);
 
   async function selectReceipt(file) {
     if (!file) return;
+    const job=++jobToken.current;
     setImageBusy(true);
+    onScanChange(true);
     setImageError("");
+    setScanResult("");
+    setScanStatus("Preparing receipt image…");
+    // Never combine an old reference with a new photo.
+    setReference("");
+    setReceiptDataUrl("");
     try {
-      setReceiptDataUrl(await prepareReceipt(file));
+      const image=await prepareReceipt(file);
+      if(jobToken.current!==job) return;
+      // Save proof in the draft before scanning. Failed OCR must not discard it.
+      setReceiptDataUrl(image);
+      setScanStatus("Opening receipt scanner…");
+      try {
+        const detected=await scanPaymentReference(image,method,provider,(message)=>{
+          if(jobToken.current===job) setScanStatus(message);
+        });
+        if(jobToken.current!==job) return;
+        if(detected){
+          setReference(detected);
+          setScanResult("detected");
+          setScanStatus("Reference detected and filled automatically. Review it, then confirm to save the reference and receipt.");
+        } else {
+          setScanResult("unreadable");
+          setScanStatus("Receipt attached, but the reference could not be read reliably. Enter it manually before saving.");
+        }
+      } catch {
+        if(jobToken.current!==job) return;
+        setScanResult("unreadable");
+        setScanStatus("Receipt attached. Scanner unavailable; enter the reference manually before saving.");
+      }
     } catch (error) {
+      if(jobToken.current!==job) return;
       setImageError(error.message);
+      setScanStatus("");
     } finally {
-      setImageBusy(false);
+      if(jobToken.current===job){
+        setImageBusy(false);
+        onScanChange(false);
+      }
     }
+  }
+
+  function selectMethod(next){
+    if(method===next) return;
+    jobToken.current++;
+    onScanChange(false);
+    setImageBusy(false);
+    setScanResult("");
+    setScanStatus("");
+    setReference("");
+    setReceiptDataUrl("");
+    setMethod(next);
+  }
+  function selectProvider(next){
+    if(provider===next) return;
+    jobToken.current++;
+    onScanChange(false);
+    setImageBusy(false);
+    setScanResult("");
+    setScanStatus("");
+    setReference("");
+    setReceiptDataUrl("");
+    setProvider(next);
   }
 
   return (
@@ -119,7 +186,7 @@ export function PaymentMethodPicker({
                 "water-payment-method " +
                 (method === item.value ? "active" : "")
               }
-              onClick={() => setMethod(item.value)}
+              onClick={() => selectMethod(item.value)}
             >
               <span className="water-payment-icon">{item.icon}</span>
               <span className="water-payment-copy">
@@ -151,7 +218,7 @@ export function PaymentMethodPicker({
           <>
             {method === "OTHERS" && <label className="water-payment-field">
               <span>Payment provider</span>
-              <select aria-label="Payment provider" value={provider} onChange={e=>setProvider(e.target.value)}>
+              <select aria-label="Payment provider" value={provider} onChange={e=>selectProvider(e.target.value)}>
                 {OTHER_PROVIDERS.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}
               </select>
             </label>}
@@ -174,9 +241,12 @@ export function PaymentMethodPicker({
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    onChange={(event) =>
-                      selectReceipt(event.target.files?.[0])
-                    }
+                    disabled={imageBusy}
+                    onChange={(event) => {
+                      const photo=event.target.files?.[0];
+                      event.target.value="";
+                      selectReceipt(photo);
+                    }}
                   />
                   <span className="water-upload-icon">
                     <Camera size={17} />
@@ -190,9 +260,12 @@ export function PaymentMethodPicker({
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={(event) =>
-                      selectReceipt(event.target.files?.[0])
-                    }
+                    disabled={imageBusy}
+                    onChange={(event) => {
+                      const photo=event.target.files?.[0];
+                      event.target.value="";
+                      selectReceipt(photo);
+                    }}
                   />
                   <span className="water-upload-icon">
                     <ImagePlus size={17} />
@@ -205,8 +278,11 @@ export function PaymentMethodPicker({
               </div>
             </div>
 
-            {imageBusy && (
-              <p className="water-payment-info">Preparing receipt image…</p>
+            {(imageBusy || scanStatus) && (
+              <p className={"water-payment-info water-scan-message " + (scanResult==="detected"?"water-scan-success":scanResult==="unreadable"?"water-scan-warning":"")} role="status" aria-live="polite">
+                {imageBusy && <span className="water-scan-spinner" aria-hidden="true" />}
+                {scanStatus || "Preparing receipt image…"}
+              </p>
             )}
             {imageError && (
               <p className="water-payment-error">{imageError}</p>
@@ -222,7 +298,15 @@ export function PaymentMethodPicker({
                 <button
                   type="button"
                   className="text-button"
-                  onClick={() => setReceiptDataUrl("")}
+                  onClick={() => {
+                     jobToken.current++;
+                     onScanChange(false);
+                     setImageBusy(false);
+                     setReceiptDataUrl("");
+                     setScanStatus("");
+                     setScanResult("");
+                     setReference("");
+                   }}
                 >
                   Remove receipt
                 </button>
@@ -239,7 +323,7 @@ export function PaymentMethodPicker({
                 onChange={(event) => setReference(event.target.value)}
               />
               <small>
-                Required (at least 3 characters). The receipt photo is optional supporting proof.
+                {imageBusy ? "Reading the receipt now; payment is temporarily locked." : "The scanner fills the reference automatically. Check or correct the number before saving."}
               </small>
             </label>
           </>
@@ -268,6 +352,7 @@ export function PaymentDialog({
   onConfirm,
 }) {
   if (!open) return null;
+  const [scanBusy, setScanBusy] = useState(false);
   const invalidPayment = !validPaymentSelection(method, reference, provider);
   const confirmLabel = isCorrection
     ? "Save payment correction"
@@ -309,6 +394,7 @@ export function PaymentDialog({
           setReceiptDataUrl={setReceiptDataUrl}
           allowUnpaid={allowUnpaid}
           isCorrection={isCorrection}
+          onScanChange={setScanBusy}
         />
 
         <div className="water-payment-actions">
@@ -319,7 +405,7 @@ export function PaymentDialog({
           <button
             type="button"
             className="primary full"
-            disabled={busy || invalidPayment}
+            disabled={busy || scanBusy || invalidPayment}
             onClick={onConfirm}
           >
             {busy ? "Processing…" : confirmLabel}
