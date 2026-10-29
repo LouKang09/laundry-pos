@@ -2431,3 +2431,12 @@ td .actions {
   .app-update-notice { padding: 14px 16px; }
   .app-update-button { width: 100%; }
 }
+
+
+/* Payment receipt scanner – Water POS-style auto-reference feedback */
+.water-scan-message{display:flex;align-items:center;gap:10px;margin:12px 0!important;padding:12px 14px;border-radius:10px;border:1px solid #dce5ec;background:#f5f8fb;color:#42546a;line-height:1.45;font-weight:600}
+.water-scan-success{border-color:#b8ddc8;background:#eefaf1;color:#206446}
+.water-scan-warning{border-color:#e8d4a4;background:#fffaf0;color:#7b551e}
+.water-scan-spinner{flex-shrink:0;display:inline-block;width:16px;height:16px;border:2px solid #b0cfc0;border-top-color:#237f5e;border-radius:50%;animation:water-scan-spin .9s linear infinite}
+@keyframes water-scan-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.water-scan-spinner{animation:none;border-top-color:#237f5e}}
