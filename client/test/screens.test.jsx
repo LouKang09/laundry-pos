@@ -68,7 +68,7 @@ test('admin new order remains visible as a clearly read-only function',async()=>
  expect(screen.getByText(/only Laundry Staff can save an order/i)).toBeTruthy();
  expect(screen.getByRole('button',{name:'Save order'})).toBeTruthy();
 });
-const screens=[['Dashboard',<Dashboard/>,'Sales trend'],['Customers',<Customers/>,'Phone'],['Orders',<OrderList/>,'Services · actual → billable'],['Pickup',<OrderList mode="pickup"/>,'Pickup & claim'],['Transactions',<OrderList mode="transactions"/>,'Transactions'],['Inventory',<Inventory/>,'Stock on hand'],['Expenses',<Expenses/>,'Encoded by'],['Reports',<Reports/>,'Services sold'],['Services',<Services/>,'Wash & Fold'],['Users',<UserManagement/>,'UI Test Admin'],['Logs',<Logs/>,'View details'],['Settings',<BusinessSettings/>,'Business & turnaround']];
+const screens=[['Dashboard',<Dashboard/>,'Sales & payment dashboard'],['Customers',<Customers/>,'Phone'],['Orders',<OrderList/>,'Services · actual → billable'],['Pickup',<OrderList mode="pickup"/>,'Pickup & claim'],['Transactions',<OrderList mode="transactions"/>,'Transactions'],['Inventory',<Inventory/>,'Stock on hand'],['Expenses',<Expenses/>,'Encoded by'],['Reports',<Reports/>,'Services sold'],['Services',<Services/>,'Wash & Fold'],['Users',<UserManagement/>,'UI Test Admin'],['Logs',<Logs/>,'View details'],['Settings',<BusinessSettings/>,'Business & turnaround']];
 for(const [name,element,marker] of screens)test(name+' screen renders live API data without a runtime error',async()=>{
  mount(element);
  await waitFor(()=>expect(screen.queryByText('Loading…')).toBeNull());
