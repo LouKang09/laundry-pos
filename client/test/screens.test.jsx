@@ -254,3 +254,23 @@ test("historical manual entry shows customer rooms before selection and includes
   await ui.click(result);
   expect(screen.getByText(name + " — Room 801")).toBeTruthy();
 });
+
+
+test("admin sales dashboard shows Water POS-style summary, selectable payment lines and daily presets",async()=>{
+  const ui=userEvent.setup();
+  mount(<Dashboard/>);
+  expect(await screen.findByText("Sales & payment dashboard")).toBeTruthy();
+  expect(screen.getByText("Total Collected")).toBeTruthy();
+  expect(screen.getByText("Other Digital")).toBeTruthy();
+  expect(screen.getByText("Net Collections")).toBeTruthy();
+  expect(screen.getByText("Hourly Sales Trend")).toBeTruthy();
+  const gcash=screen.getByRole("button",{name:"GCash"});
+  expect(gcash.getAttribute("aria-pressed")).toBe("true");
+  await ui.click(gcash);
+  expect(gcash.getAttribute("aria-pressed")).toBe("false");
+  await ui.click(screen.getByRole("button",{name:"Show all"}));
+  expect(gcash.getAttribute("aria-pressed")).toBe("true");
+  await ui.click(screen.getByRole("button",{name:"7 days"}));
+  expect(await screen.findByText("Daily Sales Trend")).toBeTruthy();
+  expect(screen.getByRole("group",{name:"Sales dashboard quick date ranges"})).toBeTruthy();
+});
