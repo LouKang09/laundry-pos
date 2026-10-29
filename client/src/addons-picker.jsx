@@ -13,7 +13,7 @@ export function AddonsPicker({ catalog = [], value, onChange, historical = false
         <h3>Optional add-ons</h3>
         <span className="muted">Detergent, fabcon, bleach and other products priced from Inventory</span>
       </div></div>
-      {catalog.length === 0 && <p className="muted">No sellable add-ons yet. Admin can enable “Available as add-on” and set a selling price in Inventory.</p>}
+      {catalog.length === 0 && <p className="muted">No add-ons configured. Open Inventory, set a selling price and enable “Available as POS / Manual Add add-on” for the products you want to offer.</p>}
       {value.map((row,i) => {
         const item = catalog.find(x => x.id === row.inventoryItemId);
         if (!item) return null;

@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import { rateLimit } from "express-rate-limit";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { db, atomic, audit, fail } from "./db.js";
 import { authRoutes, authenticate } from "./auth.js";
@@ -109,6 +110,17 @@ app.post(
     res.status(204).end();
   },
 );
+// A harmless, uncached fingerprint of the currently deployed client bundle.
+ // Open tabs use it to offer a refresh rather than running old checkout code.
+app.get("/api/app-version", (req, res) => {
+  try {
+    const index = readFileSync(path.join(dist, "index.html"), "utf8");
+    const entry = index.match(/src="(\/assets\/[^"]+\.js)"/)?.[1] || null;
+    return res.json({ entry });
+  } catch {
+    return res.json({ entry: null });
+  }
+});
 authRoutes(app);
 app.get(
   "/api/track/:token",
@@ -210,8 +222,19 @@ const dist = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../client/dist",
 );
-app.use(express.static(dist));
-app.get("/{*path}", (req, res) => res.sendFile(path.join(dist, "index.html")));
+// HTML must always be revalidated; hashed bundles are safe to cache forever.
+app.use(express.static(dist, {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith("index.html"))
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+    else if (/[/\\]assets[/\\]/.test(filePath))
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  },
+}));
+app.get("/{*path}", (req, res) => {
+  res.set("Cache-Control", "no-store, max-age=0");
+  return res.sendFile(path.join(dist, "index.html"));
+});
 app.use((err, req, res, next) => {
   if (err instanceof z.ZodError)
     return res.status(400).json({

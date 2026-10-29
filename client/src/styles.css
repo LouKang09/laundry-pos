@@ -2381,3 +2381,53 @@ td .actions {
   .historical-summary .historical-payment-section { padding: 18px; }
   .historical-save-button { width: 100%; }
 }
+
+/* Live-deployment notifier. Do not silently reload an unsaved order. */
+.app-update-notice {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  margin: 0;
+  padding: 15px 28px;
+  background: #e9f7f5;
+  border-bottom: 1px solid #9bcac6;
+  color: #194d51;
+  box-shadow: 0 2px 10px rgba(15, 75, 76, .07);
+}
+.app-update-notice > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 3px;
+}
+.app-update-notice strong { font-size: .92rem; }
+.app-update-notice span { font-size: .83rem; line-height: 1.45; }
+.app-update-button {
+  min-height: 42px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: #097b80;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.app-update-button:focus-visible {
+  outline: 3px solid rgba(9, 123, 128, .28);
+  outline-offset: 3px;
+}
+.historical-add-load {
+  min-height: 44px;
+  padding: 11px 16px;
+  margin-top: 6px;
+}
+@media (max-width: 720px) {
+  .app-update-notice { padding: 14px 16px; }
+  .app-update-button { width: 100%; }
+}

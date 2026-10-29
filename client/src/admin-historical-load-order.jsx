@@ -182,7 +182,7 @@ export function AdminHistoricalOrder() {
         <section className="panel order-summary historical-summary">
           <div className="section-title historical-summary-header">
             <div>
-              <p className="eyebrow">ORDER REVIEW</p>
+              <p className="eyebrow">CURRENT CHECKOUT · ORDER REVIEW</p>
               <h2>Historical transaction</h2>
               <p className="muted">Review your loads, optional products, and payment before saving.</p>
             </div>
@@ -222,7 +222,7 @@ export function AdminHistoricalOrder() {
                     </small>
                     <strong>{cash(line.pricing.total)}</strong>
                   </div>
-                  <button type="button" className="secondary" disabled={lines.length >= 30} onClick={() => addAnotherLoad(line)}>
+                  <button type="button" className="secondary historical-add-load" disabled={lines.length >= 30} onClick={() => addAnotherLoad(line)}>
                     <Plus size={15} /> Add another load
                   </button>
                 </div>

@@ -186,8 +186,38 @@ function Shell() {
     [loading, setLoading] = useState(true),
     [settings, setSettings] = useState({ name: "Laundry POS" }),
     [notice, setNotice] = useState(""),
-    [open, setOpen] = useState(false);
+    [open, setOpen] = useState(false),
+    [updateAvailable, setUpdateAvailable] = useState(false);
   const navigate = useNavigate();
+  // An open SPA tab retains the exact JS bundle loaded at the time it opened.
+  // Poll the deployed bundle fingerprint and surface an explicit refresh option.
+  // Never refresh silently: staff may have an unsaved order in progress.
+  useEffect(() => {
+    if (!import.meta.env.PROD) return;
+    const loadedEntry = new URL(import.meta.url).pathname;
+    let active = true;
+    const checkVersion = async () => {
+      try {
+        const response = await fetch("/api/app-version", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!response.ok) return;
+        const { entry } = await response.json();
+        if (active && entry && entry !== loadedEntry) setUpdateAvailable(true);
+      } catch {
+        // A transient loss of connectivity should not interrupt checkout.
+      }
+    };
+    checkVersion();
+    const interval = setInterval(checkVersion, 60000);
+    window.addEventListener("focus", checkVersion);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", checkVersion);
+    };
+  }, []);
   const onLogin = (data) => {
     setCsrf(data.csrfToken, data.user.id);
     setUser(data.user);
@@ -282,6 +312,22 @@ function Shell() {
           </div>
         </aside>
         <div className="workspace">
+          {updateAvailable && (
+            <div className="app-update-notice" role="status">
+              <div>
+                <strong>Updated Laundry POS is ready</strong>
+                <span>Finish or save your current work, then refresh to load the newest order and payment features.</span>
+              </div>
+              <button
+                type="button"
+                className="app-update-button"
+                onClick={() => {
+                  if (window.confirm("Refresh Laundry POS now? Unsaved form changes will be lost."))
+                    window.location.reload();
+                }}
+              >Refresh app</button>
+            </div>
+          )}
           <header className="topbar">
             <button
               className="icon mobile-menu"
