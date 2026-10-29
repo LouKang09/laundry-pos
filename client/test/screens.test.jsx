@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import {MemoryRouter} from 'react-router-dom';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,randomUUID} from 'node:crypto';
 import {Context} from '../src/context';
 import {setCsrf,post,put} from '../src/api';
 import {Customers} from '../src/operations';
@@ -153,8 +153,8 @@ test("sitewide POST/PUT/historical saves preflight the current session after a s
     const service=services.find(s=>s.name==="Wash & Fold")||services[0];
     expect(service).toBeTruthy();
     const created=await post("/orders/historical",{
-      requestKey:crypto.randomUUID(),
-      historicalDate:new Date().toISOString().slice(0,10),
+      requestKey:randomUUID(),
+      historicalDate:new Date(Date.now()-3*24*60*60*1000).toISOString().slice(0,10),
       customerId:customer.id,
       status:"CLAIMED",
       items:[{serviceId:service.id,actualQuantity:"1",express:false}],
