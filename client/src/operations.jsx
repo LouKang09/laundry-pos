@@ -19,7 +19,7 @@ import {
 import Decimal from "decimal.js";
 import { api, post, put } from "./api";
 import { useApp } from "./context";
-import { PaymentDialog, paymentPayload } from "./payment-flow";
+import { PaymentDialog, paymentPayload, paymentLabel } from "./payment-flow";
 import { PosReceiptPrint } from "./pos-receipt-print";
 import { OFFICIAL_LOGO } from "./brand";
 import {
@@ -731,6 +731,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [err, setErr] = useState(""),
     [method, setMethod] = useState("CASH"),
     [reference, setReference] = useState(""),
+    [provider, setProvider] = useState("MAYA"),
     [paymentReceiptDataUrl, setPaymentReceiptDataUrl] = useState(""),
     [paymentOpen, setPaymentOpen] = useState(false),
     [receipt, setReceipt] = useState(null),
@@ -821,7 +822,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 Payment{" "}
                 <strong>
                   {o.payment
-                    ? `${o.payment.method} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`
+                    ? `${paymentLabel(o.payment.method, o.payment.provider)} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`
                     : "Unpaid"}
                 </strong>
                 {o.payment?.receiptMime && (
@@ -1043,6 +1044,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
         setMethod={setMethod}
         reference={reference}
         setReference={setReference}
+        provider={provider}
+        setProvider={setProvider}
         receiptDataUrl={paymentReceiptDataUrl}
         setReceiptDataUrl={setPaymentReceiptDataUrl}
         allowUnpaid={false}
@@ -1052,10 +1055,11 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
           action(async () => {
             await post(
               "/orders/" + id + "/payment",
-              paymentPayload(method, reference, paymentReceiptDataUrl),
+              paymentPayload(method, reference, paymentReceiptDataUrl, provider),
             );
             setPaymentOpen(false);
             setReference("");
+            setProvider("MAYA");
             setPaymentReceiptDataUrl("");
             setMethod("CASH");
             notify("Payment received");

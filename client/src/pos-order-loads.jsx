@@ -17,7 +17,7 @@ import {
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { AddonsPicker } from "./addons-picker";
-import { PaymentDialog, paymentPayload } from "./payment-flow";
+import { PaymentDialog, paymentPayload, paymentLabel } from "./payment-flow";
 import { PosReceiptPrint } from "./pos-receipt-print";
 
 export function PosOrder() {
@@ -32,6 +32,7 @@ export function PosOrder() {
     [express, setExpress] = useState(false),
     [payment, setPayment] = useState("UNPAID"),
     [reference, setReference] = useState(""),
+    [provider, setProvider] = useState("MAYA"),
     [receiptDataUrl, setReceiptDataUrl] = useState(""),
     [paymentOpen, setPaymentOpen] = useState(false),
     [busy, setBusy] = useState(false),
@@ -249,11 +250,7 @@ export function PosOrder() {
           <div className="water-payment-summary">
             <span>Payment</span>
             <strong>
-              {payment === "UNPAID"
-                ? "Pay at Pickup"
-                : payment === "GCASH"
-                  ? "GCash"
-                  : "Cash"}
+              {paymentLabel(payment, provider)}
             </strong>
           </div>
           <button
@@ -280,6 +277,8 @@ export function PosOrder() {
         setMethod={setPayment}
         reference={reference}
         setReference={setReference}
+        provider={provider}
+        setProvider={setProvider}
         receiptDataUrl={receiptDataUrl}
         setReceiptDataUrl={setReceiptDataUrl}
         busy={busy}
@@ -291,6 +290,7 @@ export function PosOrder() {
               payment,
               reference,
               receiptDataUrl,
+              provider,
             );
             const order = await post("/orders", {
               requestKey,
@@ -308,6 +308,7 @@ export function PosOrder() {
             setCustomer(null);
             setPayment("UNPAID");
             setReference("");
+            setProvider("MAYA");
             setReceiptDataUrl("");
             setWashingMachine("");
             setFrom("");

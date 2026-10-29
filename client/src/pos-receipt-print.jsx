@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Printer, RotateCcw } from "lucide-react";
 import { OFFICIAL_LOGO } from "./brand";
 import { cash, date } from "./ui";
+import { paymentLabel } from "./payment-flow";
 
 function ReceiptCopy({ data: order, copy }) {
   const customerCopy = copy === 1;
@@ -63,7 +64,7 @@ function ReceiptCopy({ data: order, copy }) {
       </h3>
       <p>
         Payment: {order.paymentStatus === "PAID"
-          ? order.payment?.method || "PAID"
+          ? paymentLabel(order.payment?.method, order.payment?.provider)
           : "PAY AT PICKUP"}
       </p>
       <p>Washing machine: {order.washingMachine || "To be assigned when washing starts"}</p>

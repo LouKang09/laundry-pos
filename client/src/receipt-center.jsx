@@ -96,7 +96,7 @@ export function ReceiptCenter() {
                   <td className="money">{cash(o.total)}</td>
                   <td>
                     <Badge value={o.paymentStatus} />
-                    <small>{o.payment?.method || "—"}</small>
+                    <small>{o.payment?.provider || o.payment?.method || "—"}</small>
                   </td>
                   <td>
                     <Badge value={o.status} />

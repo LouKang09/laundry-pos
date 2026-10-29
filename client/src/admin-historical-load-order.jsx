@@ -17,7 +17,7 @@ import {
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { AddonsPicker } from "./addons-picker";
-import { PaymentMethodPicker, paymentPayload } from "./payment-flow";
+import { PaymentMethodPicker, paymentPayload, validPaymentSelection } from "./payment-flow";
 
 const previousBusinessDay = () =>
   new Date(Date.now() - 86400000).toLocaleDateString("en-CA", {
@@ -40,6 +40,7 @@ export function AdminHistoricalOrder() {
     [status, setStatus] = useState("CLAIMED"),
     [payment, setPayment] = useState("CASH"),
     [reference, setReference] = useState(""),
+    [provider, setProvider] = useState("MAYA"),
     [receiptDataUrl, setReceiptDataUrl] = useState(""),
     [washingMachine, setWashingMachine] = useState(""),
     [busy, setBusy] = useState(false),
@@ -235,7 +236,7 @@ export function AdminHistoricalOrder() {
             <div className="section-title">
               <div>
                 <h3>Payment</h3>
-                <span className="muted">Cash, GCash, or pay at pickup</span>
+                <span className="muted">Cash, GCash, Others, or Pay at Pickup</span>
               </div>
             </div>
             {status === "CLAIMED" && (
@@ -258,6 +259,8 @@ export function AdminHistoricalOrder() {
               setMethod={setPayment}
               reference={reference}
               setReference={setReference}
+              provider={provider}
+              setProvider={setProvider}
               receiptDataUrl={receiptDataUrl}
               setReceiptDataUrl={setReceiptDataUrl}
               allowUnpaid={status !== "CLAIMED"}
@@ -267,7 +270,7 @@ export function AdminHistoricalOrder() {
 
           <button
             className="primary full"
-            disabled={busy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || (payment === "GCASH" && reference.trim().length < 4)}
+            disabled={busy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider)}
             onClick={async () => {
               setBusy(true);
               setError("");
@@ -280,7 +283,7 @@ export function AdminHistoricalOrder() {
                   washingMachine: washingMachine.trim() || undefined,
                   items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
                   addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
-                  ...(paymentPayload(payment, reference, receiptDataUrl) ? { payment: paymentPayload(payment, reference, receiptDataUrl) } : {}),
+                  ...(paymentPayload(payment, reference, receiptDataUrl, provider) ? { payment: paymentPayload(payment, reference, receiptDataUrl, provider) } : {}),
                 });
                 setSaved(order);
                 setLines([]);
@@ -289,6 +292,7 @@ export function AdminHistoricalOrder() {
                 setStatus("CLAIMED");
                 setPayment("CASH");
                 setReference("");
+                setProvider("MAYA");
                 setReceiptDataUrl("");
                 setWashingMachine("");
                 setRequestKey(crypto.randomUUID());
