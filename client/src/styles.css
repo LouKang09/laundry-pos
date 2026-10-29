@@ -2098,3 +2098,286 @@ td .actions {
     grid-column: 1 / -1;
   }
 }
+
+
+/* Order layout: do not trap the summary/payment form in a 340-430px sidebar.
+   At ordinary laptop widths, use the full content width. At ultrawide
+   resolutions retain a generous two-column layout. */
+.historical-pos-grid,
+.live-pos-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(20px, 2.4vw, 34px);
+  align-items: start;
+}
+.historical-pos-grid > *,
+.live-pos-grid > * {
+  min-width: 0;
+}
+.historical-pos-grid .order-summary,
+.live-pos-grid .order-summary {
+  position: static;
+  width: 100%;
+}
+.historical-pos-grid .pos-left {
+  min-width: 0;
+}
+.historical-summary {
+  padding: clamp(22px, 2.7vw, 36px);
+  border-radius: 22px;
+}
+.historical-summary-header {
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 30px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.historical-summary-header .eyebrow {
+  margin: 0 0 8px;
+}
+.historical-summary-header h2 {
+  font-size: clamp(1.25rem, 1.4vw, 1.55rem);
+  line-height: 1.3;
+}
+.historical-summary-header .muted {
+  margin: 8px 0 0;
+  font-size: .88rem;
+  line-height: 1.55;
+}
+.historical-summary-header .count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: .8rem;
+}
+.historical-summary-section {
+  min-width: 0;
+  margin-bottom: 26px;
+}
+.historical-section-label {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 730;
+}
+.historical-summary .order-lines {
+  max-height: none;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+}
+.historical-summary .order-line {
+  margin: 0;
+  padding: 20px 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+.historical-summary .order-line:first-child {
+  padding-top: 2px;
+}
+.historical-summary .line-top,
+.historical-summary .line-bottom {
+  gap: 18px;
+}
+.historical-summary .line-top strong {
+  font-size: .97rem;
+  line-height: 1.4;
+}
+.historical-summary .line-inputs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+.historical-summary .line-inputs input,
+.historical-summary .line-inputs select {
+  min-width: 0;
+  min-height: 46px;
+  padding: 11px 14px;
+  font-size: .9rem;
+}
+.historical-summary .line-bottom {
+  align-items: flex-start;
+  margin: 16px 0;
+}
+.historical-summary .line-bottom small {
+  flex: 1;
+  font-size: .8rem;
+  line-height: 1.6;
+}
+.historical-summary .line-bottom strong {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+.historical-summary .order-line > button {
+  min-height: 40px;
+}
+.historical-summary .addon-picker {
+  margin: 28px 0 24px;
+  padding: clamp(18px, 2.1vw, 24px);
+  border: 1px solid #d7eae3;
+  border-radius: 18px;
+}
+.historical-summary .addon-picker .section-title {
+  margin: 0 0 20px;
+}
+.historical-summary-machine {
+  max-width: 640px;
+  padding-top: 6px;
+}
+.historical-summary-total {
+  align-items: baseline;
+  margin: 28px 0 26px;
+  padding: 24px 0 0;
+}
+.historical-summary-total > span {
+  font-size: .95rem;
+  font-weight: 650;
+}
+.historical-summary-total strong {
+  font-size: clamp(1.7rem, 2.4vw, 2.1rem);
+  letter-spacing: -.035em;
+  white-space: nowrap;
+}
+.historical-summary .historical-payment-section {
+  margin: 24px 0 28px;
+  padding: clamp(20px, 2.5vw, 28px);
+  border: 1px solid #dae9e8;
+  background: #f9fcfb;
+  border-radius: 20px;
+}
+.historical-summary .historical-payment-section .water-payment-methods {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr));
+}
+.historical-save-button {
+  min-height: 54px;
+  padding-block: 15px;
+  font-size: .97rem;
+  border-radius: 14px;
+}
+/* Every chosen add-on has its own readable row rather than four controls
+   squeezed into a two-column generic form-grid. */
+.addon-picker {
+  min-width: 0;
+}
+.addon-picker-item {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.5fr) minmax(120px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #d7eae3;
+}
+.addon-picker-item-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+.addon-picker-item-name strong { overflow-wrap: anywhere; }
+.addon-picker-item-name small {
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.addon-picker-item .field {
+  margin: 0;
+  min-width: 0;
+}
+.addon-picker-item .field input {
+  min-width: 0;
+  min-height: 44px;
+}
+.addon-picker-item-total {
+  text-align: right;
+  white-space: nowrap;
+  font-size: .94rem;
+}
+.addon-picker-item > .secondary {
+  min-height: 44px;
+}
+.addon-picker-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 18px;
+}
+.addon-picker-add .field { margin: 0; }
+.addon-picker-add button { min-height: 46px; }
+.addon-picker > .small.muted {
+  display: block;
+  margin-top: 18px;
+  line-height: 1.6;
+}
+/* Below ultrawide, stack full-width panels so nested payment cards stay
+   readable. Two left-hand cards share a row only when space permits. */
+@media (min-width: 1080px) and (max-width: 1679px) {
+  .historical-pos-grid .pos-left {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+  }
+  .historical-pos-grid .pos-left > .panel {
+    margin-bottom: 0;
+  }
+  .historical-pos-grid .pos-left > .panel:last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1680px) {
+  .historical-pos-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(600px, .95fr);
+    gap: 30px;
+  }
+  .live-pos-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(480px, .7fr);
+    gap: 26px;
+  }
+}
+/* Container rules respond to the real panel width, not to an arbitrary device
+   viewport; sidebar + padding can consume several hundred pixels. */
+.historical-summary,
+.addon-picker {
+  container-type: inline-size;
+}
+@container (max-width: 580px) {
+  .addon-picker-item {
+    grid-template-columns: minmax(0, 1fr) minmax(110px, .7fr);
+    gap: 12px 16px;
+  }
+  .addon-picker-item-total { text-align: left; }
+  .addon-picker-item > .secondary { justify-self: end; }
+}
+@container (max-width: 400px) {
+  .historical-summary .line-inputs {
+    grid-template-columns: 1fr;
+  }
+  .historical-summary .line-bottom {
+    flex-wrap: wrap;
+  }
+  .historical-summary .historical-payment-section {
+    padding: 18px;
+  }
+  .historical-summary-total {
+    align-items: flex-start;
+    gap: 10px;
+    flex-direction: column;
+  }
+  .addon-picker-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .addon-picker-item > .secondary {
+    justify-self: stretch;
+  }
+  .addon-picker-add {
+    grid-template-columns: 1fr;
+  }
+  .addon-picker-add button {
+    width: 100%;
+  }
+}
+@media (max-width: 720px) {
+  .historical-summary { padding: 20px 18px; }
+  .historical-summary-header { margin-bottom: 24px; padding-bottom: 18px; }
+  .historical-summary .historical-payment-section { padding: 18px; }
+  .historical-save-button { width: 100%; }
+}

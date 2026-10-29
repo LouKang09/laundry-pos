@@ -108,7 +108,7 @@ export function PosOrder() {
         <span className="muted">Each load is saved and priced separately. Tap a service again or use Add another load.</span>
       </PageHead>
       <ErrorBox message={error || serviceError || addonError || customerError} />
-      <div className="pos-grid">
+      <div className="pos-grid live-pos-grid">
         <div className="pos-left">
           <section className="panel">
             <div className="section-title">

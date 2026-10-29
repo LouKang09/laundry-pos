@@ -8,7 +8,7 @@ export function AddonsPicker({ catalog = [], value, onChange, historical = false
   const available = catalog.filter(item => !value.some(row => row.inventoryItemId === item.id));
   const selected = available.some(item => item.id === choice) ? choice : available[0]?.id;
   return (
-    <section className="action-panel">
+    <section className="action-panel addon-picker">
       <div className="section-title"><div>
         <h3>Optional add-ons</h3>
         <span className="muted">Detergent, fabcon, bleach and other products priced from Inventory</span>
@@ -18,19 +18,19 @@ export function AddonsPicker({ catalog = [], value, onChange, historical = false
         const item = catalog.find(x => x.id === row.inventoryItemId);
         if (!item) return null;
         const counted = ["PCS","PIECE","CAPS"].includes(item.unit.toUpperCase());
-        return <div key={row.inventoryItemId} className="form-grid" style={{alignItems:"end",marginBottom:12}}>
-          <div><strong>{item.name}</strong><small>{cash(item.salePrice)} / {item.unit}{!historical ? ` · ${item.stock} available` : ""}</small></div>
+        return <div key={row.inventoryItemId} className="addon-picker-item">
+          <div className="addon-picker-item-name"><strong>{item.name}</strong><small>{cash(item.salePrice)} / {item.unit}{!historical ? ` · ${item.stock} available` : ""}</small></div>
           <Field label={`Quantity (${item.unit})`}>
             <input type="number" min={counted ? "1" : "0.001"} step={counted ? "1" : "0.001"}
               max={!historical ? String(item.stock) : undefined}
               value={row.quantity}
               onChange={e => onChange(value.map((v,j) => i===j?{...v,quantity:e.target.value}:v))}/>
           </Field>
-          <strong>{cash(Number(item.salePrice)*Number(row.quantity||0))}</strong>
+          <strong className="addon-picker-item-total">{cash(Number(item.salePrice)*Number(row.quantity||0))}</strong>
           <button className="secondary" type="button" onClick={()=>onChange(value.filter((_,j)=>i!==j))}><Trash2 size={16}/> Remove</button>
         </div>;
       })}
-      {available.length > 0 && <div className="form-grid" style={{alignItems:"end"}}>
+      {available.length > 0 && <div className="addon-picker-add">
         <Field label="Choose add-on">
           <select value={selected} onChange={e=>setChoice(e.target.value)}>
             {available.map(item=><option key={item.id} value={item.id}>{item.name} · {cash(item.salePrice)}/{item.unit}</option>)}

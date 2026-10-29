@@ -107,7 +107,7 @@ export function AdminHistoricalOrder() {
       </section>
       <ErrorBox message={error || serviceError || addonError || customerError} />
 
-      <div className="pos-grid">
+      <div className="pos-grid historical-pos-grid">
         <div className="pos-left">
           <section className="panel">
             <div className="section-title"><h2><span className="step">1</span> Historical record</h2></div>
@@ -179,9 +179,18 @@ export function AdminHistoricalOrder() {
           </section>
         </div>
 
-        <section className="panel order-summary">
-          <div className="section-title"><h2>Historical transaction</h2><span className="count">{lines.length} loads</span></div>
-          <div className="order-lines">
+        <section className="panel order-summary historical-summary">
+          <div className="section-title historical-summary-header">
+            <div>
+              <p className="eyebrow">ORDER REVIEW</p>
+              <h2>Historical transaction</h2>
+              <p className="muted">Review your loads, optional products, and payment before saving.</p>
+            </div>
+            <span className="count">{lines.length} {lines.length === 1 ? "load" : "loads"}</span>
+          </div>
+          <div className="historical-summary-section">
+            <h3 className="historical-section-label">Selected loads</h3>
+            <div className="order-lines">
             {priced.length ? (
               priced.map((line, index) => (
                 <div className="order-line" key={line.localId}>
@@ -219,20 +228,26 @@ export function AdminHistoricalOrder() {
                 </div>
               ))
             ) : <Empty>Select services for the historical transaction.</Empty>}
+            </div>
           </div>
 
           <AddonsPicker catalog={addonCatalog || []} value={addons} onChange={setAddons} historical/>
 
-          <Field label="Washing machine / machine number (optional)">
-            <input
-              value={washingMachine}
-              onChange={(event) => setWashingMachine(event.target.value)}
-              placeholder="e.g. Washer 1 · 12 kg"
-              maxLength={80}
-            />
-          </Field>
-          <div className="total"><span>Total</span><strong>{cash(total)}</strong></div>
-          <div className="water-payment-inline">
+          <div className="historical-summary-machine">
+            <Field label="Washing machine / machine number (optional)">
+              <input
+                value={washingMachine}
+                onChange={(event) => setWashingMachine(event.target.value)}
+                placeholder="e.g. Washer 1 · 12 kg"
+                maxLength={80}
+              />
+            </Field>
+          </div>
+          <div className="total historical-summary-total">
+            <span>Transaction total</span>
+            <strong>{cash(total)}</strong>
+          </div>
+          <div className="water-payment-inline historical-payment-section">
             <div className="section-title">
               <div>
                 <h3>Payment</h3>
@@ -274,7 +289,7 @@ export function AdminHistoricalOrder() {
           {claimedWithoutPayment && <ErrorBox message="Claimed historical transactions must be marked paid." />}
 
           <button
-            className="primary full"
+            className="primary full historical-save-button"
             disabled={busy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider)}
             onClick={async () => {
               setBusy(true);
