@@ -870,3 +870,29 @@ test("33 payment corrections switch methods without collecting twice, including 
   const lookup = await staff.get("/api/customers?q=801").expect(200);
   assert(lookup.body.rows.some((row) => row.id === customer.id && row.roomUnit === "Room 801"));
 });
+
+
+test("34 historical manual records accept today's business date but reject future dates", async () => {
+  const today = DateTime.now().setZone("Asia/Manila").toISODate();
+  const tomorrow = DateTime.now().setZone("Asia/Manila").plus({days: 1}).toISODate();
+  const existing = (await db.order.count());
+  const data = orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }], { method: "CASH" });
+  const created = await call(admin, ac, "post", "/orders/historical", {
+    ...data,
+    historicalDate: today,
+    status: "CLAIMED",
+  }).expect(201);
+  assert.equal(created.body.paymentStatus, "PAID");
+  assert.equal(created.body.status, "CLAIMED");
+  assert.equal(DateTime.fromISO(created.body.createdAt).setZone("Asia/Manila").toISODate(),today);
+  assert(new Date(created.body.createdAt).getTime() <= Date.now() + 2000);
+  assert(new Date(created.body.claimedAt).getTime() <= Date.now() + 2000);
+  assert(created.body.statusHistory === undefined ||
+    created.body.statusHistory.every((h)=>new Date(h.createdAt).getTime() <= Date.now() + 2000));
+  assert.equal(await db.order.count(), existing + 1);
+  await call(admin, ac, "post", "/orders/historical", {
+    ...data, requestKey: crypto.randomUUID(),
+    historicalDate: tomorrow, status: "CLAIMED",
+  }).expect(400);
+  assert.equal(await db.order.count(), existing + 1);
+});
