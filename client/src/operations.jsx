@@ -309,7 +309,7 @@ export function NewOrder() {
                     <button key={c.id} onClick={() => setCustomer(c)}>
                       <span>
                         <strong>{customerDisplayName(c)}</strong>
-                        <small>{c.phone}{c.roomUnit ? " · " + c.roomUnit : ""}</small>
+                        <small>{c.phone || "No phone number"}</small>
                       </span>
                       <Plus size={17} />
                     </button>
@@ -1076,6 +1076,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
         receiptDataUrl={paymentReceiptDataUrl}
         setReceiptDataUrl={setPaymentReceiptDataUrl}
         allowUnpaid={false}
+        isCorrection={paymentEditing}
         busy={busy}
         title={paymentEditing ? "Correct payment method" : "Settle unpaid order"}
         onConfirm={() =>
