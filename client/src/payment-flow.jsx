@@ -89,6 +89,7 @@ export function PaymentMethodPicker({
   receiptDataUrl,
   setReceiptDataUrl,
   allowUnpaid = true,
+  isCorrection = false,
 }) {
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState("");
@@ -133,8 +134,9 @@ export function PaymentMethodPicker({
       <div className="water-payment-panel">
         {method === "CASH" && (
           <p className="water-payment-info">
-            Confirm the cash payment after receiving the full amount from the
-            customer.
+            {isCorrection
+              ? "Correct the recorded method to Cash. This does not collect a second payment or change the order total."
+              : "Confirm the cash payment after receiving the full amount from the customer."}
           </p>
         )}
 
@@ -260,14 +262,16 @@ export function PaymentDialog({
   receiptDataUrl,
   setReceiptDataUrl,
   allowUnpaid = true,
+  isCorrection = false,
   busy = false,
   title = "Complete transaction",
   onConfirm,
 }) {
   if (!open) return null;
   const invalidPayment = !validPaymentSelection(method, reference, provider);
-  const confirmLabel =
-    method === "UNPAID"
+  const confirmLabel = isCorrection
+    ? "Save payment correction"
+    : method === "UNPAID"
       ? "Save as Unpaid"
       : "Confirm " + paymentLabel(method, provider) + " Payment";
 
@@ -304,11 +308,12 @@ export function PaymentDialog({
           receiptDataUrl={receiptDataUrl}
           setReceiptDataUrl={setReceiptDataUrl}
           allowUnpaid={allowUnpaid}
+          isCorrection={isCorrection}
         />
 
         <div className="water-payment-actions">
           <div className="water-dialog-total">
-            <span>Amount due</span>
+            <span>{isCorrection ? "Recorded payment" : "Amount due"}</span>
             <strong>{cash(total)}</strong>
           </div>
           <button
