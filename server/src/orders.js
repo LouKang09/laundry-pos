@@ -670,10 +670,9 @@ orders.put("/:id/claimed-at", admin, async (req, res) => {
       : null;
     if (localMinute(order.createdAt) > claimedAtLocal)
       fail(400, "Claim time cannot be earlier than the received time");
-    if (order.payment?.createdAt && localMinute(order.payment.createdAt) > claimedAtLocal)
-      fail(400, "Claim time cannot be earlier than payment. Correct the payment date first if needed.");
-    if (precedingReady && localMinute(precedingReady.createdAt) > claimedAtLocal)
-      fail(400, "Claim time cannot be earlier than the most recent Ready stage");
+    // A corrected historical pickup may legitimately predate when the payment
+    // or Ready status was entered in the POS. The received timestamp remains
+    // the earliest physical date; payment/Ready recording times are not limits.
 
     if (order.claimedAt && localMinute(order.claimedAt) === claimedAtLocal)
       fail(400, "Select a different claim date and time");
@@ -684,9 +683,13 @@ orders.put("/:id/claimed-at", admin, async (req, res) => {
       data: { claimedAt },
       include: orderInclude,
     });
-    if (claimHistory) {
-      // Keep the visible status timeline consistent with the corrected claim.
-      // The audit record below preserves both original timestamps.
+    // If correcting before a recorded Ready event, do not move the workflow
+    // event before Ready: that would misrepresent the event log. The corrected
+    // physical pickup time lives in order.claimedAt and the audit trail.
+    // Otherwise synchronize the corresponding CLAIMED history event as before.
+    const updateClaimEvent = !!claimHistory &&
+      (!precedingReady || claimedAt >= precedingReady.createdAt);
+    if (updateClaimEvent) {
       await tx.orderStatusHistory.update({
         where: { id: claimHistory.id },
         data: { createdAt: claimedAt },
@@ -697,6 +700,10 @@ orders.put("/:id/claimed-at", admin, async (req, res) => {
       previousClaimedAt: order.claimedAt?.toISOString() || null,
       actualClaimedAt: claimedAt.toISOString(),
       originalClaimStatusEventAt: claimHistory?.createdAt.toISOString() || null,
+      claimStatusEventUpdated: updateClaimEvent,
+      recordedReadyAfterActualClaim: !!precedingReady && claimedAt < precedingReady.createdAt,
+      paymentRecordedAfterActualClaim: !!order.payment &&
+        claimedAt < order.payment.createdAt,
       reason,
       paymentDateUnchanged: order.payment?.createdAt.toISOString() || null,
       receivedDateUnchanged: order.createdAt.toISOString(),

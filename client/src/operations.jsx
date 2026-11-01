@@ -771,13 +771,9 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     o.payment?.createdAt ? new Date(o.payment.createdAt).getTime() : Infinity,
     o.claimedAt ? new Date(o.claimedAt).getTime() : Infinity,
   ))) : "";
-  const latestReadyEvent = o?.statusHistory?.filter(h => h.newStatus === "READY")
-    .reduce((latest, h) => !latest || new Date(h.createdAt) > new Date(latest.createdAt) ? h : latest, null);
-  const earliestClaimTime = o ? shopPaymentDateTime(new Date(Math.max(
-    new Date(o.createdAt).getTime(),
-    o.payment?.createdAt ? new Date(o.payment.createdAt).getTime() : 0,
-    latestReadyEvent ? new Date(latestReadyEvent.createdAt).getTime() : 0,
-  ))) : "";
+  // Backdated pickups can be before payment and status-entry timestamps.
+  // Received remains the earliest valid physical event.
+  const earliestClaimTime = o ? shopPaymentDateTime(o.createdAt) : "";
   useEffect(() => setWashingMachine(o?.washingMachine || ""), [o?.washingMachine]);
   return (
     <Modal title={o?.orderNumber || "Order details"} onClose={onClose} wide>
@@ -981,7 +977,6 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     <input
                       aria-label="Actual claim date and time"
                       type="datetime-local"
-                      min={earliestClaimTime}
                       max={shopPaymentDateTime()}
                       step="60"
                       required
@@ -1001,8 +996,11 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                   </Field>
                 </div>
                 <p className="small muted">
-                  Claim time must not be before receipt, payment, or the latest Ready stage
-                  and cannot be in the future. Edit the earlier timestamps first if needed.
+                  You may select any earlier date after the laundry was received, even if
+                  payment or the Ready status was recorded later. Future dates are not allowed.
+                  {claimedAtLocal && claimedAtLocal < earliestClaimTime && (
+                    <strong> This date is before Received. Edit the received date first.</strong>
+                  )}
                 </p>
                 <div className="actions">
                   <button type="button" className="secondary" disabled={busy}
