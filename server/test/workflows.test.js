@@ -1214,3 +1214,96 @@ test("40 transactions overview accurately distinguishes paid but unclaimed, Read
     "/api/orders?view=pickup&q=" + encodeURIComponent(ready.orderNumber)
   ).expect(200)).body.total, 1);
 });
+
+test("41 Admin can correct when a claimed transaction was received without moving its payment or inventory", async () => {
+  const zone = "Asia/Manila";
+  const day = DateTime.now().setZone(zone).minus({ days: 7 }).toISODate();
+  const oldDay = DateTime.now().setZone(zone).minus({ days: 9 }).toISODate();
+  const newReceivedLocal = oldDay + "T09:30";
+  const reportFor = date => admin.get("/api/reports?period=Daily&date=" + date).expect(200);
+  const beforeOldDay = (await reportFor(oldDay)).body;
+  const beforeDay = (await reportFor(day)).body;
+  const order = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: day,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "2", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  const paidAt = order.payment.createdAt;
+  const claimedAt = order.claimedAt;
+  const previousReceivedAt = order.createdAt;
+  const total = order.total;
+  const initialHistory = await db.orderStatusHistory.count({ where: { orderId: order.id } });
+  const afterCreate = (await reportFor(day)).body;
+  assert.equal(Number(afterCreate.grossSales), Number(beforeDay.grossSales) + Number(total));
+
+  await call(staff, sc, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: newReceivedLocal, reason: "Correct laundry drop off",
+  }).expect(403);
+  await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: newReceivedLocal, reason: "x",
+  }).expect(400);
+  await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: "not-a-date", reason: "Correct laundry drop off",
+  }).expect(400);
+  await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: DateTime.now().setZone(zone).plus({ days: 1 }).toISODate() + "T09:00",
+    reason: "Correct laundry drop off",
+  }).expect(400);
+  const afterPayment = DateTime.fromISO(paidAt).setZone(zone).plus({ hours: 4 }).toFormat("yyyy-MM-dd'T'HH:mm");
+  await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: afterPayment, reason: "Correct laundry drop off",
+  }).expect(400);
+
+  const corrected = (await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: newReceivedLocal,
+    reason: "Laundry arrived two days earlier than recorded",
+  }).expect(200)).body;
+  assert.equal(
+    DateTime.fromISO(corrected.createdAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    newReceivedLocal,
+  );
+  assert.equal(corrected.status, "CLAIMED");
+  assert.equal(corrected.claimedAt, claimedAt);
+  assert.equal(corrected.payment.createdAt, paidAt);
+  assert.equal(corrected.paymentStatus, "PAID");
+  assert.equal(corrected.total, total);
+  assert.equal(await db.payment.count({ where: { orderId: order.id } }), 1);
+  assert.equal(await db.orderStatusHistory.count({ where: { orderId: order.id } }), initialHistory);
+  const movedFrom = (await reportFor(day)).body;
+  const movedTo = (await reportFor(oldDay)).body;
+  assert.equal(Number(movedFrom.grossSales), Number(beforeDay.grossSales));
+  assert.equal(Number(movedTo.grossSales), Number(beforeOldDay.grossSales) + Number(total));
+  const history = (await admin.get("/api/orders/" + order.id).expect(200)).body;
+  const audit = history.transactionHistory.find(h => h.action === "RECEIVED_DATE_CORRECTED");
+  assert(audit);
+  assert.equal(audit.metadata.previousReceivedAt, previousReceivedAt);
+  assert.equal(audit.metadata.actualReceivedAt, corrected.createdAt);
+  assert.equal(audit.metadata.paymentDateUnchanged, paidAt);
+  assert.equal(audit.metadata.reportingDateChanged, true);
+  assert.equal(audit.metadata.reason, "Laundry arrived two days earlier than recorded");
+
+  await call(admin, ac, "put", "/orders/" + order.id + "/received-at", {
+    receivedAtLocal: newReceivedLocal, reason: "Same value not a change",
+  }).expect(400);
+
+  const stillClaimed = (await staff.get("/api/orders?view=transactions&q=" +
+    encodeURIComponent(order.orderNumber)).expect(200)).body;
+  assert.equal(stillClaimed.total, 1);
+  assert.equal(stillClaimed.rows[0].createdAt, corrected.createdAt);
+});
+
+test("42 received-date correction is refused for deleted or cancelled transactions", async () => {
+  const day = DateTime.now().setZone("Asia/Manila").minus({ days: 5 }).toISODate();
+  const oldDay = DateTime.now().setZone("Asia/Manila").minus({ days: 6 }).toISODate();
+  const created = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: day,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  await call(admin, ac, "delete", "/orders/" + created.id, {}).expect(200);
+  await call(admin, ac, "put", "/orders/" + created.id + "/received-at", {
+    receivedAtLocal: oldDay + "T08:10", reason: "Cancelled wrong received time",
+  }).expect(409);
+});
