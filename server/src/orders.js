@@ -380,6 +380,58 @@ orders.get("/:id", async (req, res) => {
   await audit(db, req.user.id, "ORDER_VIEWED", "Order", o.id);
   res.json({ ...o, statusHistory, notifications, transactionHistory });
 });
+// Admin-only correction of when the laundry was physically received.
+// The order's received timestamp drives its order-date reports; actual payment,
+// status transitions, quantities, inventory, and receipt proof are unaffected.
+// Keep the correction itself in the audit trail rather than rewriting history.
+orders.put("/:id/received-at", admin, async (req, res) => {
+  const { receivedAtLocal, reason } = z.object({
+    receivedAtLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Enter the received date and time"),
+    reason: z.string().trim().min(5, "Explain why the received date is being corrected").max(500),
+  }).strict().parse(req.body);
+  const result = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt || order.status === "CANCELLED")
+      fail(409, "Deleted or cancelled transactions cannot change their received date");
+    const cfg = await business(tx);
+    const receivedAt = DateTime.fromISO(receivedAtLocal, { zone: cfg.timezone });
+    if (!receivedAt.isValid || receivedAt.toFormat("yyyy-MM-dd'T'HH:mm") !== receivedAtLocal)
+      fail(400, "Enter a valid received date and time");
+    const when = receivedAt.toJSDate();
+    if (when.getTime() > Date.now() + 60_000)
+      fail(400, "Received date and time cannot be in the future");
+    if (when.getTime() > (order.payment?.createdAt?.getTime() ?? Infinity))
+      fail(400, "Received time cannot be after payment. Correct the payment date first if needed.");
+    if (when.getTime() > (order.claimedAt?.getTime() ?? Infinity))
+      fail(400, "Received time cannot be after the recorded claim date");
+    // A minute-resolution editor should not create an audit event just because
+    // the original database timestamp contained seconds.
+    const previousMinute = DateTime.fromJSDate(order.createdAt)
+      .setZone(cfg.timezone).toFormat("yyyy-MM-dd'T'HH:mm");
+    if (receivedAtLocal === previousMinute)
+      fail(400, "Select a different received date and time");
+
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: { createdAt: when },
+      include: orderInclude,
+    });
+    await audit(tx, req.user.id, "RECEIVED_DATE_CORRECTED", "Order", order.id, {
+      orderNumber: order.orderNumber,
+      previousReceivedAt: order.createdAt.toISOString(),
+      actualReceivedAt: when.toISOString(),
+      reason,
+      paymentDateUnchanged: order.payment?.createdAt?.toISOString() || null,
+      statusUnchanged: order.status,
+      totalUnchanged: order.total.toString(),
+      reportingDateChanged: DateTime.fromJSDate(order.createdAt).setZone(cfg.timezone).toISODate()
+        !== receivedAt.toISODate(),
+    });
+    return updated;
+  });
+  res.json(result);
+});
+
 orders.put("/:id", admin, async (req, res) => {
   const v = z.object({
     customerName: text,
