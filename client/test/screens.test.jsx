@@ -340,3 +340,53 @@ test("Transactions page describes and loads the complete claimed history for lau
   expect(screen.getByText(/Transactions contains all claimed orders/)).toBeTruthy();
   expect(screen.queryByText(/today's claimed transactions only/)).toBeNull();
 });
+
+test("Admin Transactions displays real database counts and navigation to missing-status records", async () => {
+  mount(<OrderList mode="transactions"/>);
+  expect(await screen.findByText("Transaction reconciliation")).toBeTruthy();
+  expect(screen.getByText("Currently claimed")).toBeTruthy();
+  expect(screen.getByText("Ready for pickup")).toBeTruthy();
+  expect(screen.getByText("Deleted claimed")).toBeTruthy();
+  expect(screen.getByText("Other active stages")).toBeTruthy();
+  expect(screen.getByRole("link",{name:"View Ready orders"}).getAttribute("href")).toBe("/pickup");
+  expect(screen.getByRole("link",{name:"Review Deleted"}).getAttribute("href")).toBe("/deleted-transactions");
+  const counts=(await adminAgent.get("/api/orders/transactions/overview").expect(200)).body;
+  expect(counts.claimed).toBeGreaterThanOrEqual(0);
+  expect(counts.statuses.CLAIMED||0).toBe(counts.claimed);
+});
+
+test("Admin can correct the paid date and return a claimed transaction to Ready with a reason", async () => {
+  const userEventInstance=userEvent.setup();
+  const customer=await post("/customers",{
+    name:prefix+" Reopen UI Customer",phone:"09123456789",
+  });
+  const services=(await adminAgent.get("/api/services")).body;
+  const service=services.find(s=>s.name==="Wash & Fold")||services[0];
+  const oldDate=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
+  const created=await post("/orders/historical",{
+    requestKey:randomUUID(),historicalDate:oldDate,customerId:customer.id,
+    status:"CLAIMED",items:[{serviceId:service.id,actualQuantity:"1",express:false}],
+    payment:{method:"CASH"},
+  });
+  mount(<OrderDetail id={created.id} onClose={()=>{}}/>);
+  expect(await screen.findByText("Claimed transaction correction")).toBeTruthy();
+  const paidDateBefore=created.payment.createdAt;
+  await userEventInstance.click(screen.getByRole("button",{name:"Edit payment details and date"}));
+  expect(screen.getByLabelText("Actual payment date and time")).toBeTruthy();
+  expect(screen.getByRole("button",{name:"Save payment correction"})).toBeTruthy();
+  await userEventInstance.click(screen.getByRole("button",{name:"Close payment"}));
+
+  await userEventInstance.click(screen.getByRole("button",{name:"Return claimed order to Ready"}));
+  expect(screen.getByRole("button",{name:"Confirm return to Ready"}).disabled).toBe(true);
+  await userEventInstance.type(screen.getByLabelText("Reason for reversing this claim"),"Customer has not collected laundry");
+  expect(screen.getByRole("button",{name:"Confirm return to Ready"}).disabled).toBe(false);
+  await userEventInstance.click(screen.getByRole("button",{name:"Confirm return to Ready"}));
+
+  await waitFor(async()=>{
+    const saved=(await adminAgent.get("/api/orders/"+created.id).expect(200)).body;
+    expect(saved.status).toBe("READY");
+    expect(saved.claimedAt).toBeNull();
+    expect(saved.payment.createdAt).toBe(paidDateBefore);
+    expect(saved.transactionHistory.some(h=>h.action==="CLAIM_REOPENED")).toBe(true);
+  });
+});
