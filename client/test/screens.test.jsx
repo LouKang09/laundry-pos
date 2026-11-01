@@ -1,6 +1,6 @@
 import React from 'react';
 import {beforeAll,afterAll,afterEach,test,expect} from 'vitest';
-import {render,screen,waitFor,cleanup} from '@testing-library/react';
+import {render,screen,waitFor,cleanup,fireEvent} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {MemoryRouter} from 'react-router-dom';
 import request from 'supertest';
@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {Context} from '../src/context';
 import {setCsrf,post,put} from '../src/api';
-import {Customers} from '../src/operations';
+import {Customers,OrderDetail} from '../src/operations';
 import {Dashboard,NewOrder,OrderList} from '../src/workflow';
 import {PosOrder} from '../src/pos-order-loads';
 import {AdminHistoricalOrder} from '../src/admin-historical-load-order';
@@ -273,4 +273,62 @@ test("admin sales dashboard shows Water POS-style summary, selectable payment li
   await ui.click(screen.getByRole("button",{name:"7 days"}));
   expect(await screen.findByText("Daily Sales Trend")).toBeTruthy();
   expect(screen.getByRole("group",{name:"Sales dashboard quick date ranges"})).toBeTruthy();
+});
+
+test("manual entry requires an actual payment date, but Pay at Pickup stays unpaid", async () => {
+  const ui = userEvent.setup();
+  mount(<AdminHistoricalOrder/>);
+  await screen.findByRole("button",{name:/Wash & Fold/});
+  const paymentDate = screen.getByLabelText("Actual payment date and time");
+  expect(paymentDate.type).toBe("datetime-local");
+  expect(paymentDate.value).toBe("");
+  const orderDate = screen.getByLabelText("Transaction date").value;
+  expect(paymentDate.min).toBe(orderDate + "T00:00");
+  expect(screen.getByText(/Enter the actual date and time the customer paid/)).toBeTruthy();
+
+  await ui.click(screen.getByRole("button",{name:/Pay at Pickup · Mark Ready/}));
+  expect(screen.queryByLabelText("Actual payment date and time")).toBeNull();
+  expect(screen.getByText(/No payment date is recorded yet/)).toBeTruthy();
+
+  await ui.click(screen.getByRole("button",{name:/Cash Pay in cash/}));
+  expect(screen.getByLabelText("Actual payment date and time").value).toBe("");
+  const pastDate = new Date(Date.now() - 24 * 3600 * 1000).toISOString().slice(0,10);
+  fireEvent.change(screen.getByLabelText("Transaction date"),{target:{value:pastDate}});
+  fireEvent.change(screen.getByLabelText("Actual payment date and time"),{
+    target:{value:pastDate+"T13:20"},
+  });
+  expect(screen.getByLabelText("Actual payment date and time").value).toBe(pastDate+"T13:20");
+});
+
+test("admin settlement and correction dialogs allow actual payment datetime editing",async()=>{
+  const entryDate = new Date(Date.now() - 7*24*3600*1000).toISOString().slice(0,10);
+  const customer=(await post("/customers",{name:prefix+" Date Picker",phone:"09123456789"}));
+  const services=(await adminAgent.get("/api/services")).body;
+  const service=services.find(x=>x.name==="Wash & Fold")||services[0];
+  const order=await post("/orders/historical",{
+    requestKey:randomUUID(),
+    historicalDate:entryDate,
+    customerId:customer.id,
+    status:"READY",
+    items:[{serviceId:service.id,actualQuantity:"1",express:false}],
+  });
+  const ui=userEvent.setup();
+  mount(<OrderDetail id={order.id} onClose={()=>{}}/>);
+  const receive=await screen.findByRole("button",{name:/Payment ·/});
+  await ui.click(receive);
+  const input=screen.getByLabelText("Actual payment date and time");
+  expect(input.type).toBe("datetime-local");
+  expect(input.min).toBe(entryDate+"T00:00");
+  const recordedDate = new Date(Date.now()-2*24*3600*1000).toISOString().slice(0,10)+"T10:45";
+  fireEvent.change(input,{target:{value:recordedDate}});
+  await ui.click(screen.getByRole("button",{name:/Confirm Cash Payment/}));
+  await waitFor(async()=>{
+    const payment=(await adminAgent.get("/api/orders/"+order.id)).body.payment;
+    expect(payment).toBeTruthy();
+    expect(new Date(payment.createdAt).getTime()).toBeGreaterThan(0);
+  });
+  await screen.findByText(/Recorded payment/);
+  await ui.click(screen.getByRole("button",{name:/Edit payment details and date/}));
+  const corrected=screen.getByLabelText("Actual payment date and time");
+  expect(corrected.value).toBe(recordedDate);
 });
