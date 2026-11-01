@@ -2491,3 +2491,28 @@ td .actions {
 @media(max-width:700px){.laundry-sales-heading h2{font-size:1.24rem}.laundry-date-presets>span:last-child{display:none}.laundry-sales-metrics{gap:10px}.laundry-sales-metric{min-height:122px;padding:14px 13px}.laundry-sales-metric>strong{font-size:1.26rem}.laundry-sales-chart{padding:17px 13px 12px!important}.laundry-legend-reset{margin-left:0}.laundry-sales-chart-header h3{font-size:1.1rem}}
 @media(max-width:410px){.laundry-sales-metrics{grid-template-columns:1fr}.laundry-sales-metric{min-height:104px}}
 @media(prefers-reduced-motion:reduce){.laundry-date-presets button{transition:none}}
+
+/* Admin-only payment timestamp controls: separate order and collection dates. */
+.payment-date-editor {
+  margin-top: 22px;
+  padding: 18px 20px;
+  border: 1px solid #b7d9d4;
+  border-radius: 16px;
+  background: #f1faf8;
+}
+.payment-date-editor > span {
+  color: #245e5a;
+  font-size: .93rem;
+}
+.payment-date-editor input {
+  width: 100%;
+  min-height: 48px;
+  background: #fff;
+}
+.payment-date-editor small {
+  line-height: 1.55;
+  color: #577b75;
+}
+@media (max-width: 640px) {
+  .payment-date-editor { padding: 16px; }
+}

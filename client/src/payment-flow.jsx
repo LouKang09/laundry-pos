@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { scanPaymentReference } from "./receipt-ocr";
 import { Camera, ImagePlus } from "lucide-react";
 import { cash } from "./ui";
+import { shopPaymentDateTime } from "./payment-date";
 
 const noop = () => {};
 
@@ -336,6 +337,25 @@ export function PaymentMethodPicker({
   );
 }
 
+export function PaymentDateEditor({ value, onChange, earliestDate, helpText }) {
+  return (
+    <label className="water-payment-field payment-date-editor">
+      <span>Actual payment date and time</span>
+      <input
+        aria-label="Actual payment date and time"
+        type="datetime-local"
+        required
+        step="60"
+        min={earliestDate ? earliestDate + "T00:00" : undefined}
+        max={shopPaymentDateTime()}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <small>{helpText || "Enter when the customer actually paid. Reports and the payment history will use this date, not the date you enter it."}</small>
+    </label>
+  );
+}
+
 export function PaymentDialog({
   open,
   onClose,
@@ -350,6 +370,10 @@ export function PaymentDialog({
   setReceiptDataUrl,
   allowUnpaid = true,
   isCorrection = false,
+  showPaymentDateEditor = false,
+  paidAtLocal = "",
+  setPaidAtLocal = () => {},
+  earliestPaymentDate,
   busy = false,
   title = "Complete transaction",
   onConfirm,
@@ -400,6 +424,17 @@ export function PaymentDialog({
           onScanChange={setScanBusy}
         />
 
+        {showPaymentDateEditor && method !== "UNPAID" && (
+          <PaymentDateEditor
+            value={paidAtLocal}
+            onChange={setPaidAtLocal}
+            earliestDate={earliestPaymentDate}
+            helpText={isCorrection
+              ? "Correct when this payment was actually received. The amount and original transaction date remain unchanged."
+              : "Use the actual date and time received, including earlier payments recorded later. Collections will appear on that date."}
+          />
+        )}
+
         <div className="water-payment-actions">
           <div className="water-dialog-total">
             <span>{isCorrection ? "Recorded payment" : "Amount due"}</span>
@@ -408,7 +443,9 @@ export function PaymentDialog({
           <button
             type="button"
             className="primary full"
-            disabled={busy || scanBusy || invalidPayment}
+            disabled={busy || scanBusy || invalidPayment || (showPaymentDateEditor && method !== "UNPAID" &&
+              (!paidAtLocal || paidAtLocal > shopPaymentDateTime() ||
+                (earliestPaymentDate && paidAtLocal.slice(0, 10) < earliestPaymentDate)))}
             onClick={onConfirm}
           >
             {busy ? "Processing…" : confirmLabel}

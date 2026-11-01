@@ -18,7 +18,8 @@ import {
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { AddonsPicker } from "./addons-picker";
-import { PaymentMethodPicker, paymentPayload, validPaymentSelection } from "./payment-flow";
+import { PaymentMethodPicker, PaymentDateEditor, paymentPayload, validPaymentSelection } from "./payment-flow";
+import { shopPaymentDateTime } from "./payment-date";
 
 const businessToday = () => {
   const fields = new Intl.DateTimeFormat("en-CA", {
@@ -50,6 +51,7 @@ export function AdminHistoricalOrder() {
     [historicalDate, setHistoricalDate] = useState(previousBusinessDay()),
     [status, setStatus] = useState("CLAIMED"),
     [payment, setPayment] = useState("CASH"),
+    [paidAtLocal, setPaidAtLocal] = useState(""),
     [reference, setReference] = useState(""),
     [provider, setProvider] = useState("MAYA"),
     [receiptDataUrl, setReceiptDataUrl] = useState(""),
@@ -298,12 +300,25 @@ export function AdminHistoricalOrder() {
               allowUnpaid={status !== "CLAIMED"}
               onScanChange={setScanBusy}
             />
+            {payment !== "UNPAID" && (
+              <PaymentDateEditor
+                value={paidAtLocal}
+                onChange={setPaidAtLocal}
+                earliestDate={historicalDate}
+                helpText="Enter the actual date and time the customer paid, even if payment was collected days after the laundry was received. Reports will use this payment date."
+              />
+            )}
+            {payment === "UNPAID" && (
+              <p className="small muted">No payment date is recorded yet. When the customer pays, open this order in Orders or Pickup, choose Receive Payment, and enter the actual payment date.</p>
+            )}
           </div>
           {claimedWithoutPayment && <ErrorBox message="Claimed historical transactions must be marked paid." />}
 
           <button
             className="primary full historical-save-button"
-            disabled={busy || scanBusy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider)}
+            disabled={busy || scanBusy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider) ||
+              (payment !== "UNPAID" && (!paidAtLocal || paidAtLocal > shopPaymentDateTime() ||
+                paidAtLocal.slice(0,10) < historicalDate))}
             onClick={async () => {
               setBusy(true);
               setError("");
@@ -316,7 +331,9 @@ export function AdminHistoricalOrder() {
                   washingMachine: washingMachine.trim() || undefined,
                   items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
                   addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
-                  ...(paymentPayload(payment, reference, receiptDataUrl, provider) ? { payment: paymentPayload(payment, reference, receiptDataUrl, provider) } : {}),
+                  ...(payment !== "UNPAID" ? {
+                    payment: { ...paymentPayload(payment, reference, receiptDataUrl, provider), paidAtLocal },
+                  } : {}),
                 });
                 setSaved(order);
                 setLines([]);
@@ -324,6 +341,7 @@ export function AdminHistoricalOrder() {
                 setCustomer(null);
                 setStatus("CLAIMED");
                 setPayment("CASH");
+                setPaidAtLocal("");
                 setReference("");
                 setProvider("MAYA");
                 setReceiptDataUrl("");

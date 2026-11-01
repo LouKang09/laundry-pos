@@ -20,6 +20,7 @@ import Decimal from "decimal.js";
 import { api, post, put } from "./api";
 import { useApp } from "./context";
 import { PaymentDialog, paymentPayload, paymentLabel } from "./payment-flow";
+import { shopPaymentDateTime } from "./payment-date";
 import { customerDisplayName } from "./customer-display";
 import { PosReceiptPrint } from "./pos-receipt-print";
 import { OFFICIAL_LOGO } from "./brand";
@@ -733,6 +734,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [method, setMethod] = useState("CASH"),
     [reference, setReference] = useState(""),
     [provider, setProvider] = useState("MAYA"),
+    [paidAtLocal, setPaidAtLocal] = useState(""),
     [paymentReceiptDataUrl, setPaymentReceiptDataUrl] = useState(""),
     [paymentOpen, setPaymentOpen] = useState(false),
      [paymentEditing, setPaymentEditing] = useState(false),
@@ -852,7 +854,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 <h3>Recorded payment</h3>
                 <p className="muted">
                   {paymentLabel(o.payment?.method, o.payment?.provider)}
-                  {o.payment?.reference ? " · Ref: " + o.payment.reference : ""}. Correct the method without charging twice or changing the total.
+                  {o.payment?.reference ? " · Ref: " + o.payment.reference : ""}.
+                  {admin ? " Correct the payment method, reference, or actual payment date without charging twice or changing the total." : " Correct the payment method without charging twice."}
                 </p>
                 <button
                   type="button"
@@ -863,11 +866,12 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     setMethod(o.payment.method);
                     setProvider(o.payment.provider || "MAYA");
                     setReference(o.payment.reference || "");
+                    setPaidAtLocal(shopPaymentDateTime(o.payment.createdAt));
                     setPaymentReceiptDataUrl("");
                     setPaymentOpen(true);
                   }}
                 >
-                  <Edit3 size={17} /> Change payment method
+                  <Edit3 size={17} /> {admin ? "Edit payment details and date" : "Change payment method"}
                 </button>
                 {o.status === "CLAIMED" && <p className="muted small">Admin correction for completed transactions. Earlier details remain in the audit trail.</p>}
               </div>
@@ -883,7 +887,15 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     <button
                       className="primary"
                       disabled={busy}
-                      onClick={() => { setPaymentEditing(false); setMethod("CASH"); setReference(""); setProvider("MAYA"); setPaymentReceiptDataUrl(""); setPaymentOpen(true); }}
+                      onClick={() => {
+                        setPaymentEditing(false);
+                        setMethod("CASH");
+                        setReference("");
+                        setProvider("MAYA");
+                        setPaidAtLocal(shopPaymentDateTime());
+                        setPaymentReceiptDataUrl("");
+                        setPaymentOpen(true);
+                      }}
                     >
                       Payment · {cash(o.total)}
                     </button>
@@ -1077,14 +1089,22 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
         setReceiptDataUrl={setPaymentReceiptDataUrl}
         allowUnpaid={false}
         isCorrection={paymentEditing}
+        showPaymentDateEditor={admin}
+        paidAtLocal={paidAtLocal}
+        setPaidAtLocal={setPaidAtLocal}
+        earliestPaymentDate={o?.createdAt ? shopPaymentDateTime(o.createdAt).slice(0,10) : undefined}
         busy={busy}
-        title={paymentEditing ? "Correct payment method" : "Settle unpaid order"}
+        title={paymentEditing ? "Correct payment details" : "Settle unpaid order"}
         onConfirm={() =>
           action(async () => {
             const payload = paymentPayload(method, reference, paymentReceiptDataUrl, provider);
+            if (admin && paidAtLocal && (!paymentEditing ||
+              paidAtLocal !== shopPaymentDateTime(o.payment?.createdAt))) {
+              payload.paidAtLocal = paidAtLocal;
+            }
             if (paymentEditing) {
               await put("/orders/" + id + "/payment", payload);
-              notify("Payment method corrected; the change is in transaction history.");
+              notify("Payment details updated; the correction is in transaction history.");
             } else {
               await post("/orders/" + id + "/payment", payload);
               notify("Payment received");
@@ -1094,6 +1114,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
             setReference("");
             setProvider("MAYA");
             setPaymentReceiptDataUrl("");
+            setPaidAtLocal("");
             setMethod("CASH");
           })
         }
