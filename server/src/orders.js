@@ -229,10 +229,10 @@ orders.get("/", async (req, res) => {
   } else if (view === "transactions") {
     if (!deletedView && requestedStatus && requestedStatus !== "CLAIMED")
       fail(400, "Transactions only shows Claimed orders");
-    scope = deletedView ? {} : {
-      status: "CLAIMED",
-      ...(staffToday ? { claimedAt: today } : {}),
-    };
+    // Transactions is the permanent claim ledger for both Admin and Staff.
+    // Restricting Staff to claimedAt=today hid past and historical transactions
+    // even though those claimed orders still existed in the database.
+    scope = deletedView ? {} : { status: "CLAIMED" };
   } else {
     scope = {
       ...(requestedStatus ? { status: requestedStatus } : {}),

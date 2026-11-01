@@ -870,11 +870,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
           </Link>
         )}
       </PageHead>
-      {!deletedOnly && !admin && mode !== "pickup" && (
+      {!deletedOnly && !admin && mode === "orders" && (
         <p className="muted">
-          {mode === "orders"
-            ? "Laundry Staff Orders shows today's Received, Washing, Drying, and Folding work only."
-            : "Laundry Staff Transactions shows today's claimed transactions only."}
+          Laundry Staff Orders shows today's Received, Washing, Drying, and Folding work only.
         </p>
       )}
       <section className="panel">
@@ -920,8 +918,8 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
         )}
         {mode === "transactions" && !deletedOnly && (
           <p className="muted">
-            Transactions contains claimed orders. Admin sees the full history;
-            Laundry Staff sees today's claimed transactions.
+            Transactions contains all claimed orders, including earlier dates and
+            historical manual entries, for both Admin and Laundry Staff.
           </p>
         )}
         {deletedOnly && (

@@ -332,3 +332,11 @@ test("admin settlement and correction dialogs allow actual payment datetime edit
   const corrected=screen.getByLabelText("Actual payment date and time");
   expect(corrected.value).toBe(recordedDate);
 });
+
+test("Transactions page describes and loads the complete claimed history for laundry staff", async()=>{
+  activeAgent=staffAgent;setCsrf(staffCsrf);
+  mount(<OrderList mode="transactions"/>,staffUser,false);
+  await waitFor(()=>expect(screen.queryByText("Loading…")).toBeNull());
+  expect(screen.getByText(/Transactions contains all claimed orders/)).toBeTruthy();
+  expect(screen.queryByText(/today's claimed transactions only/)).toBeNull();
+});

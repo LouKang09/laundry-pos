@@ -1055,3 +1055,44 @@ test("37 admin payment timestamp validates future, earlier dates and staff permi
     orderDay,
   );
 });
+
+test("38 claimed transactions list all dates for staff and admin, without showing unclaimed orders", async () => {
+  const businessZone = "Asia/Manila";
+  const day = DateTime.now().setZone(businessZone).minus({ days: 16 }).toISODate();
+  const claimed = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: day,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  assert.equal(claimed.status, "CLAIMED");
+  assert.equal(DateTime.fromISO(claimed.claimedAt).setZone(businessZone).toISODate(), day);
+
+  const ready = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: day,
+    customerId: customer.id, status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+  }).expect(201)).body;
+  for (const agent of [staff, admin]) {
+    const history = await agent.get(
+      "/api/orders?view=transactions&q=" + encodeURIComponent(claimed.orderNumber)
+    ).expect(200);
+    assert.equal(history.body.total, 1);
+    assert.equal(history.body.rows[0].id, claimed.id);
+    assert.equal(history.body.rows[0].status, "CLAIMED");
+
+    const notClaimed = await agent.get(
+      "/api/orders?view=transactions&q=" + encodeURIComponent(ready.orderNumber)
+    ).expect(200);
+    assert.equal(notClaimed.body.total, 0);
+    assert.deepEqual(notClaimed.body.rows, []);
+  }
+
+  // Existing access boundaries still apply: only Admin can view the deleted ledger.
+  await staff.get("/api/orders?view=transactions&deleted=1").expect(403);
+  // Laundry Staff's active Orders view remains limited to today.
+  const staffOrders = await staff.get(
+    "/api/orders?view=orders&q=" + encodeURIComponent(claimed.orderNumber)
+  ).expect(200);
+  assert.equal(staffOrders.body.total, 0);
+});
