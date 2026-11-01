@@ -43,7 +43,7 @@ async function report(from, to) {
       },
     }),
     db.orderStatusHistory.findMany({
-      where: { newStatus: "READY", createdAt: date, order: { deletedAt: null } },
+      where: { newStatus: "READY", oldStatus: { not: "CLAIMED" }, createdAt: date, order: { deletedAt: null } },
       include: { order: { include: { items: true } } },
     }),
   ]);

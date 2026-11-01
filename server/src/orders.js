@@ -279,6 +279,42 @@ orders.get("/", async (req, res) => {
   );
   res.json({ rows, total, page, view });
 });
+// Admin-only reconciliation counts; these are real database statuses, not
+// inferred from the latest page of Transactions or a date-limited dashboard.
+orders.get("/transactions/overview", admin, async (req, res) => {
+  const [statusGroups, deletedClaimed, formerlyClaimed, paidNotClaimed, missingClaimedAt] =
+    await Promise.all([
+      db.order.groupBy({
+        by: ["status"],
+        where: { deletedAt: null },
+        _count: { _all: true },
+      }),
+      db.order.count({ where: { status: "CLAIMED", deletedAt: { not: null } } }),
+      db.order.count({
+        where: {
+          deletedAt: null,
+          status: { not: "CLAIMED" },
+          statusHistory: { some: { newStatus: "CLAIMED" } },
+        },
+      }),
+      db.order.count({
+        where: { deletedAt: null, status: { not: "CLAIMED" }, paymentStatus: "PAID" },
+      }),
+      db.order.count({ where: { deletedAt: null, status: "CLAIMED", claimedAt: null } }),
+    ]);
+  const statuses = Object.fromEntries(statusGroups.map(({status, _count}) => [status, _count._all]));
+  res.set("Cache-Control", "private, no-store");
+  res.json({
+    statuses,
+    claimed: statuses.CLAIMED || 0,
+    ready: statuses.READY || 0,
+    active: ["RECEIVED", "WASHING", "DRYING", "FOLDING"]
+      .reduce((sum, stage) => sum + (statuses[stage] || 0), 0),
+    deletedClaimed, formerlyClaimed, paidNotClaimed, missingClaimedAt,
+    activeOrderTotal: Object.values(statuses).reduce((sum, count) => sum + count, 0),
+  });
+});
+
 orders.get("/scan/:token", async (req, res) => {
   const token = z
     .string()
@@ -540,6 +576,45 @@ orders.post("/:id/payment", async (req, res) => {
     }),
   );
 });
+// Explicit Admin correction of an accidental claim. Never reverse payment,
+// stock consumption or the original order date. A new claim uses the existing
+// READY -> CLAIMED workflow and records a fresh claimedAt timestamp.
+orders.post("/:id/reopen", admin, async (req, res) => {
+  const { reason } = z.object({
+    reason: z.string().trim().min(5, "Explain why this claim is being reversed").max(500),
+  }).strict().parse(req.body);
+  const result = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt || order.status !== "CLAIMED")
+      fail(409, "Only active claimed orders can be returned to Ready");
+    const beforeClaimedAt = order.claimedAt?.toISOString() || null;
+    const updated = await tx.order.updateMany({
+      where: { id: order.id, deletedAt: null, status: "CLAIMED" },
+      data: { status: "READY", claimedAt: null },
+    });
+    if (updated.count !== 1) fail(409, "Order status changed. Refresh and try again.");
+    await tx.orderStatusHistory.create({
+      data: {
+        orderId: order.id,
+        oldStatus: "CLAIMED",
+        newStatus: "READY",
+        userId: req.user.id,
+      },
+    });
+    await audit(tx, req.user.id, "CLAIM_REOPENED", "Order", order.id, {
+      orderNumber: order.orderNumber,
+      previousClaimedAt: beforeClaimedAt,
+      previousStatus: "CLAIMED",
+      newStatus: "READY",
+      reason,
+      paymentPreserved: !!order.payment,
+      totalUnchanged: order.total.toString(),
+    });
+    return getOrder(tx, order.id);
+  });
+  res.json(result);
+});
+
 orders.post("/:id/status", async (req, res) => {
   const { status, reason, washingMachine } = z
     .object({
