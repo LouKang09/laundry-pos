@@ -337,7 +337,7 @@ test("Transactions page describes and loads the complete claimed history for lau
   activeAgent=staffAgent;setCsrf(staffCsrf);
   mount(<OrderList mode="transactions"/>,staffUser,false);
   await waitFor(()=>expect(screen.queryByText("Loading…")).toBeNull());
-  expect(screen.getByText(/Transactions contains all claimed orders/)).toBeTruthy();
+  expect(screen.getByText(/Transactions contains every currently claimed order/)).toBeTruthy();
   expect(screen.queryByText(/today's claimed transactions only/)).toBeNull();
 });
 
