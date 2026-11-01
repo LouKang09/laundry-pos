@@ -926,3 +926,132 @@ test("35 Water POS-style sales analytics has selectable hour/day granularity and
   const far=DateTime.now().setZone("Asia/Manila").minus({days:366}).toISODate();
   await admin.get("/api/dashboard/sales-analytics?from="+far+"&to="+day).expect(400);
 });
+
+test("36 admin manual payments use actual paid date, not entry date, and late pickup payments are editable", async () => {
+  const zone = "Asia/Manila";
+  const now = DateTime.now().setZone(zone);
+  const transactionDay = now.minus({ days: 8 }).toISODate();
+  const firstPaidDate = now.minus({ days: 5 }).toISODate();
+  const firstPaidLocal = firstPaidDate + "T10:25";
+  const laterPaidDate = now.minus({ days: 3 }).toISODate();
+  const laterPaidLocal = laterPaidDate + "T15:10";
+  const reportFor = (day) =>
+    admin.get("/api/reports?period=Daily&date=" + day).expect(200);
+
+  const beforeFirst = Number((await reportFor(firstPaidDate)).body.paymentsReceived);
+  const manualPaid = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate: transactionDay,
+    customerId: customer.id,
+    status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH", paidAtLocal: firstPaidLocal },
+  }).expect(201)).body;
+  assert.equal(
+    DateTime.fromISO(manualPaid.createdAt).setZone(zone).toISODate(),
+    transactionDay,
+  );
+  assert.equal(
+    DateTime.fromISO(manualPaid.payment.createdAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    firstPaidLocal,
+  );
+  assert.equal(
+    Number((await reportFor(firstPaidDate)).body.paymentsReceived),
+    beforeFirst + Number(manualPaid.total),
+  );
+
+  // A later payment can be recorded on its real business date, not the date
+  // staff/admin happened to enter the order or receive-payment correction.
+  const lateOrder = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate: transactionDay,
+    customerId: customer.id,
+    status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+  }).expect(201)).body;
+  assert.equal(lateOrder.paymentStatus, "UNPAID");
+  assert.equal(lateOrder.payment, null);
+  const beforeLater = Number((await reportFor(laterPaidDate)).body.paymentsReceived);
+  const settled = (await call(admin, ac, "post", "/orders/" + lateOrder.id + "/payment", {
+    method: "CASH", paidAtLocal: laterPaidLocal,
+  }).expect(200)).body;
+  assert.equal(settled.paymentStatus, "PAID");
+  assert.equal(
+    DateTime.fromISO(settled.payment.createdAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    laterPaidLocal,
+  );
+  assert.equal(
+    Number((await reportFor(laterPaidDate)).body.paymentsReceived),
+    beforeLater + Number(lateOrder.total),
+  );
+
+  // Admin may correct the payment date alone, with no duplicate payment
+  // and no changes to the order date or total.
+  const correctedLocal = now.minus({ days: 2 }).toISODate() + "T08:05";
+  const firstOrderDate = settled.createdAt;
+  const corrected = (await call(admin, ac, "put", "/orders/" + lateOrder.id + "/payment", {
+    method: "CASH", paidAtLocal: correctedLocal,
+  }).expect(200)).body;
+  assert.equal(corrected.createdAt, firstOrderDate);
+  assert.equal(corrected.total, settled.total);
+  assert.equal(
+    DateTime.fromISO(corrected.payment.createdAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    correctedLocal,
+  );
+  assert.equal(await db.payment.count({ where: { orderId: lateOrder.id } }), 1);
+  assert.equal(Number((await reportFor(laterPaidDate)).body.paymentsReceived), beforeLater);
+  assert.equal(
+    corrected.transactionHistory?.some(h => h.action === "PAYMENT_DATE_CORRECTED") || 
+    (await admin.get("/api/orders/" + lateOrder.id).expect(200)).body.transactionHistory.some(h => h.action === "PAYMENT_DATE_CORRECTED"),
+    true,
+  );
+});
+
+test("37 admin payment timestamp validates future, earlier dates and staff permissions", async () => {
+  const zone = "Asia/Manila";
+  const now = DateTime.now().setZone(zone);
+  const orderDay = now.minus({ days: 4 }).toISODate();
+  const paymentOnDay = now.minus({ days: 2 }).toISODate() + "T11:00";
+  const future = now.plus({ days: 1 }).toISODate() + "T11:00";
+  const tooEarly = now.minus({ days: 5 }).toISODate() + "T11:00";
+  const unpaidManual = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: orderDay,
+    customerId: customer.id, status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+  }).expect(201)).body;
+
+  for (const paidAtLocal of [future, tooEarly, "not-a-date", "2026-14-99T99:00"]) {
+    await call(admin, ac, "post", "/orders/" + unpaidManual.id + "/payment", {
+      method: "CASH", paidAtLocal,
+    }).expect(400);
+  }
+  await call(staff, sc, "post", "/orders/" + unpaidManual.id + "/payment", {
+    method: "CASH", paidAtLocal: paymentOnDay,
+  }).expect(403);
+  assert.equal(await db.payment.count({ where: { orderId: unpaidManual.id } }), 0);
+  const manual = (await call(admin, ac, "post", "/orders/" + unpaidManual.id + "/payment", {
+    method: "CASH", paidAtLocal: paymentOnDay,
+  }).expect(200)).body;
+  await call(staff, sc, "put", "/orders/" + unpaidManual.id + "/payment", {
+    method: "CASH", paidAtLocal: now.minus({ days: 1 }).toISODate() + "T11:00",
+  }).expect(403);
+  assert.equal((await db.payment.findUnique({ where: { orderId: unpaidManual.id } })).createdAt.toISOString(),
+    new Date(manual.payment.createdAt).toISOString());
+
+  await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: orderDay,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH", paidAtLocal: tooEarly },
+  }).expect(400);
+  const legacy = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: orderDay,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  assert.equal(
+    DateTime.fromISO(legacy.payment.createdAt).setZone(zone).toISODate(),
+    orderDay,
+  );
+});
