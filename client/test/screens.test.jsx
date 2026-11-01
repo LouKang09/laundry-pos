@@ -486,3 +486,43 @@ test("Laundry Staff cannot edit the claim date", async()=>{
   await screen.findByRole("heading",{name:claimed.customerName});
   expect(screen.queryByRole("button",{name:"Edit claim date/time"})).toBeNull();
 });
+
+test("Admin claim-date picker allows older dates before a later recorded payment", async () => {
+  const user = userEvent.setup();
+  const customer = await post("/customers", {
+    name: prefix + " Backdated Pickup Customer", phone: "09123456789",
+  });
+  const services = (await adminAgent.get("/api/services")).body;
+  const service = services.find(x => x.name === "Wash & Fold") || services[0];
+  const receivedDay = new Date(Date.now() - 18*24*60*60*1000).toISOString().slice(0,10);
+  const claimedDay = new Date(Date.now() - 12*24*60*60*1000).toISOString().slice(0,10);
+  const paidDay = new Date(Date.now() - 4*24*60*60*1000).toISOString().slice(0,10);
+  const created = await post("/orders/historical", {
+    requestKey: randomUUID(), historicalDate: receivedDay, customerId: customer.id,
+    status: "READY",
+    items: [{ serviceId: service.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH", paidAtLocal: paidDay + "T15:00" },
+  });
+  const claimed = await post("/orders/" + created.id + "/status", {status: "CLAIMED"});
+  const paymentAt = claimed.payment.createdAt;
+
+  mount(<OrderDetail id={created.id} onClose={() => {}}/>);
+  await user.click(await screen.findByRole("button", {name: "Edit claim date/time"}));
+  const input = screen.getByLabelText("Actual claim date and time");
+  // Browser picker must allow navigating to any earlier date; validation is
+  // explicit, rather than disabling earlier months based on payment/Ready.
+  expect(input.min).toBe("");
+  const actualClaim = claimedDay + "T10:15";
+  fireEvent.change(input, {target: {value: actualClaim}});
+  await user.type(screen.getByLabelText("Reason for claim date correction"),
+    "Pickup happened before the customer paid");
+  expect(screen.getByRole("button", {name: "Save claim date"}).disabled).toBe(false);
+  await user.click(screen.getByRole("button", {name: "Save claim date"}));
+  await waitFor(async () => {
+    const saved = (await adminAgent.get("/api/orders/" + created.id).expect(200)).body;
+    expect(new Date(saved.claimedAt).getTime()).toBeLessThan(new Date(paymentAt).getTime());
+    expect(saved.payment.createdAt).toBe(paymentAt);
+    expect(saved.createdAt).toBe(created.createdAt);
+    expect(saved.transactionHistory.some(h => h.action === "CLAIM_DATE_CORRECTED")).toBe(true);
+  });
+});

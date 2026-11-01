@@ -1390,7 +1390,7 @@ test("43 Admin corrects claim date/time and dashboard totals without changing pa
   assert.equal(listed.rows[0].claimedAt, result.claimedAt);
 });
 
-test("44 claim-date correction rejects unclaimed/deleted records and predating latest Ready", async () => {
+test("44 claim-date correction allows older pickup dates than a later recorded Ready stage", async () => {
   const zone = "Asia/Manila";
   const historicalDate = DateTime.now().setZone(zone).minus({ days: 4 }).toISODate();
   const earlier = DateTime.now().setZone(zone).minus({ days: 6 }).toISODate();
@@ -1414,13 +1414,76 @@ test("44 claim-date correction rejects unclaimed/deleted records and predating l
   }).expect(200)).body;
   assert.equal(reclaimed.status, "CLAIMED");
   assert.notEqual(reclaimed.claimedAt, firstClaimed.claimedAt);
-  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+  const claimedHistoryBefore = await db.orderStatusHistory.findFirst({
+    where: { orderId: order.id, newStatus: "CLAIMED" },
+    orderBy: { createdAt: "desc" },
+  });
+  const backdated = (await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
     claimedAtLocal: historicalDate + "T15:00",
-    reason: "Invalid earlier than reopening",
-  }).expect(400);
+    reason: "Pickup was earlier than the staff entered the new Ready stage",
+  }).expect(200)).body;
+  assert.equal(DateTime.fromISO(backdated.claimedAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    historicalDate + "T15:00");
+  assert.equal(backdated.status, "CLAIMED");
+  assert.equal(backdated.payment.createdAt, reclaimed.payment.createdAt);
+  const unchangedHistory = await db.orderStatusHistory.findUnique({
+    where: { id: claimedHistoryBefore.id },
+  });
+  assert.equal(unchangedHistory.createdAt.toISOString(), claimedHistoryBefore.createdAt.toISOString(),
+    "Backdating before Ready must not falsify the recorded event timeline");
+  const auditTrail = (await admin.get("/api/orders/" + order.id).expect(200)).body.transactionHistory;
+  const correction = auditTrail.find(h => h.action === "CLAIM_DATE_CORRECTED");
+  assert.equal(correction.metadata.claimStatusEventUpdated, false);
+  assert.equal(correction.metadata.recordedReadyAfterActualClaim, true);
 
   await call(admin, ac, "delete", "/orders/" + order.id, {}).expect(200);
   await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
     claimedAtLocal: earlier + "T14:00", reason: "Attempt on deleted transaction",
   }).expect(409);
+});
+
+test("45 Admin may backdate claim before a later payment while keeping Received, payment and reports intact", async () => {
+  const zone = "Asia/Manila";
+  const receivedDay = DateTime.now().setZone(zone).minus({ days: 18 }).toISODate();
+  const claimDay = DateTime.now().setZone(zone).minus({ days: 13 }).toISODate();
+  const paymentDay = DateTime.now().setZone(zone).minus({ days: 4 }).toISODate();
+  const claimedAtLocal = claimDay + "T10:40";
+  const previousClaimCount = (await admin.get("/api/dashboard?date=" + claimDay).expect(200)).body.claimedToday;
+  const order = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate: receivedDay,
+    customerId: customer.id,
+    status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH", paidAtLocal: paymentDay + "T16:30" },
+  }).expect(201)).body;
+  const claimed = (await call(admin, ac, "post", "/orders/" + order.id + "/status", {
+    status: "CLAIMED",
+  }).expect(200)).body;
+  assert(claimed.claimedAt);
+  const originalPayment = claimed.payment.createdAt;
+  const originalReceived = claimed.createdAt;
+
+  const changed = (await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal,
+    reason: "Customer picked up before payment entry was recorded",
+  }).expect(200)).body;
+  assert.equal(DateTime.fromISO(changed.claimedAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    claimedAtLocal);
+  assert.equal(changed.payment.createdAt, originalPayment);
+  assert.equal(changed.createdAt, originalReceived);
+  assert.equal(changed.status, "CLAIMED");
+  assert(new Date(changed.claimedAt) < new Date(changed.payment.createdAt));
+  assert.equal((await admin.get("/api/dashboard?date=" + claimDay).expect(200)).body.claimedToday,
+    previousClaimCount + 1);
+  const detail = (await admin.get("/api/orders/" + order.id).expect(200)).body;
+  const audit = detail.transactionHistory.find(x => x.action === "CLAIM_DATE_CORRECTED");
+  assert.equal(audit.metadata.paymentRecordedAfterActualClaim, true);
+  assert.equal(audit.metadata.claimStatusEventUpdated, true);
+
+  // The received date still precedes pickup and is the only lower bound.
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: DateTime.fromISO(receivedDay).minus({ days: 1 }).toISODate() + "T10:00",
+    reason: "Invalid claim earlier than the received date",
+  }).expect(400);
 });
