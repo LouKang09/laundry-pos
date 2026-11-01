@@ -748,7 +748,10 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [reopenReason, setReopenReason] = useState(""),
     [receivedEditing, setReceivedEditing] = useState(false),
     [receivedAtLocal, setReceivedAtLocal] = useState(""),
-    [receivedReason, setReceivedReason] = useState("");
+    [receivedReason, setReceivedReason] = useState(""),
+    [claimEditing, setClaimEditing] = useState(false),
+    [claimedAtLocal, setClaimedAtLocal] = useState(""),
+    [claimedReason, setClaimedReason] = useState("");
   async function action(fn) {
     setBusy(true);
     setErr("");
@@ -767,6 +770,13 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     Date.now(),
     o.payment?.createdAt ? new Date(o.payment.createdAt).getTime() : Infinity,
     o.claimedAt ? new Date(o.claimedAt).getTime() : Infinity,
+  ))) : "";
+  const latestReadyEvent = o?.statusHistory?.filter(h => h.newStatus === "READY")
+    .reduce((latest, h) => !latest || new Date(h.createdAt) > new Date(latest.createdAt) ? h : latest, null);
+  const earliestClaimTime = o ? shopPaymentDateTime(new Date(Math.max(
+    new Date(o.createdAt).getTime(),
+    o.payment?.createdAt ? new Date(o.payment.createdAt).getTime() : 0,
+    latestReadyEvent ? new Date(latestReadyEvent.createdAt).getTime() : 0,
   ))) : "";
   useEffect(() => setWashingMachine(o?.washingMachine || ""), [o?.washingMachine]);
   return (
@@ -830,6 +840,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                     onClick={() => {
                       setReceivedAtLocal(shopPaymentDateTime(o.createdAt));
                       setReceivedReason("");
+                      setClaimEditing(false);
                       setReceivedEditing(true);
                     }}
                   >
@@ -837,6 +848,28 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                   </button>
                 )}
               </p>
+              {o.status === "CLAIMED" && (
+                <p className="received-date-display claim-date-display">
+                  Claimed <strong>{o.claimedAt ? date(o.claimedAt) : "Not recorded"}</strong>
+                  {admin && !o.deletedAt && (
+                    <button
+                      type="button"
+                      className="secondary received-date-edit-button"
+                      disabled={busy}
+                      onClick={() => {
+                        setClaimedAtLocal(o.claimedAt
+                          ? shopPaymentDateTime(o.claimedAt)
+                          : shopPaymentDateTime());
+                        setClaimedReason("");
+                        setReceivedEditing(false);
+                        setClaimEditing(true);
+                      }}
+                    >
+                      <Edit3 size={15} /> Edit claim date/time
+                    </button>
+                  )}
+                </p>
+              )}
               <p>
                 Approximate pickup{" "}
                 <strong>
@@ -929,6 +962,68 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                       notify("Received date updated; the original is saved in transaction history.");
                     })}>
                     Save received date
+                  </button>
+                </div>
+              </div>
+            )}
+            {admin && claimEditing && !o.deletedAt && o.status === "CLAIMED" && (
+              <div className="action-panel received-date-editor claim-date-editor">
+                <div>
+                  <h3>Correct when the laundry was claimed</h3>
+                  <p className="muted">
+                    This changes the recorded pickup/claim time and claim-date dashboard totals.
+                    The received date, payment date, amount, and status stay unchanged.
+                    The previous claim date and your reason are preserved in transaction history.
+                  </p>
+                </div>
+                <div className="received-date-editor-grid">
+                  <Field label="Actual claim date and time">
+                    <input
+                      aria-label="Actual claim date and time"
+                      type="datetime-local"
+                      min={earliestClaimTime}
+                      max={shopPaymentDateTime()}
+                      step="60"
+                      required
+                      value={claimedAtLocal}
+                      onChange={(event) => setClaimedAtLocal(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Reason for the correction">
+                    <textarea
+                      aria-label="Reason for claim date correction"
+                      rows={3}
+                      maxLength={500}
+                      placeholder="e.g. Laundry was actually picked up yesterday afternoon"
+                      value={claimedReason}
+                      onChange={(event) => setClaimedReason(event.target.value)}
+                    />
+                  </Field>
+                </div>
+                <p className="small muted">
+                  Claim time must not be before receipt, payment, or the latest Ready stage
+                  and cannot be in the future. Edit the earlier timestamps first if needed.
+                </p>
+                <div className="actions">
+                  <button type="button" className="secondary" disabled={busy}
+                    onClick={() => { setClaimEditing(false); setClaimedReason(""); }}>
+                    Cancel
+                  </button>
+                  <button type="button" className="primary"
+                    disabled={busy || !claimedAtLocal ||
+                      claimedAtLocal < earliestClaimTime ||
+                      claimedAtLocal > shopPaymentDateTime() ||
+                      claimedAtLocal === (o.claimedAt ? shopPaymentDateTime(o.claimedAt) : "") ||
+                      claimedReason.trim().length < 5}
+                    onClick={() => action(async () => {
+                      await put("/orders/" + id + "/claimed-at", {
+                        claimedAtLocal, reason: claimedReason.trim(),
+                      });
+                      setClaimEditing(false);
+                      setClaimedReason("");
+                      notify("Claim date updated; the original is saved in transaction history.");
+                    })}>
+                    Save claim date
                   </button>
                 </div>
               </div>

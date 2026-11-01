@@ -2576,3 +2576,8 @@ td .actions {
  .received-date-editor-grid { grid-template-columns: 1fr; gap: 14px; }
  .received-date-editor .actions > button { flex: 1 1 100%; }
 }
+
+/* Claimed timestamp correction uses the same responsive editor as Received. */
+.claim-date-display { margin-top: 3px; }
+.claim-date-editor { border-color: #afd0cb; }
+.claim-date-editor .received-date-editor-grid { margin-top: 6px; }
