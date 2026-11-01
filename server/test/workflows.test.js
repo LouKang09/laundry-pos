@@ -1307,3 +1307,120 @@ test("42 received-date correction is refused for deleted or cancelled transactio
     receivedAtLocal: oldDay + "T08:10", reason: "Cancelled wrong received time",
   }).expect(409);
 });
+
+test("43 Admin corrects claim date/time and dashboard totals without changing payment or status", async () => {
+  const zone = "Asia/Manila";
+  const originalDate = DateTime.now().setZone(zone).minus({ days: 9 }).toISODate();
+  const actualDate = DateTime.now().setZone(zone).minus({ days: 5 }).toISODate();
+  const actualClaimLocal = actualDate + "T14:25";
+  const beforeOriginal = (await admin.get("/api/dashboard?date=" + originalDate).expect(200)).body.claimedToday;
+  const beforeActual = (await admin.get("/api/dashboard?date=" + actualDate).expect(200)).body.claimedToday;
+  const order = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate: originalDate,
+    customerId: customer.id, status: "CLAIMED",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  assert.equal((await admin.get("/api/dashboard?date=" + originalDate).expect(200)).body.claimedToday,
+    beforeOriginal + 1);
+  const receivedAt = order.createdAt;
+  const paidAt = order.payment.createdAt;
+  const total = order.total;
+  const oldClaimedAt = order.claimedAt;
+  const oldStatusEvent = await db.orderStatusHistory.findFirst({
+    where: { orderId: order.id, newStatus: "CLAIMED" },
+    orderBy: { createdAt: "desc" },
+  });
+  const beforeStatusCount = await db.orderStatusHistory.count({ where: { orderId: order.id } });
+
+  await call(staff, sc, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: actualClaimLocal, reason: "Recorded wrong pickup date",
+  }).expect(403);
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: actualClaimLocal, reason: "x",
+  }).expect(400);
+  for (const bad of [
+    "not-a-date",
+    "2026-99-99T12:00",
+    DateTime.now().setZone(zone).plus({ days: 2 }).toISODate() + "T15:00",
+    originalDate + "T08:10",
+  ]) {
+    await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+      claimedAtLocal: bad, reason: "Correct wrong claim timestamp",
+    }).expect(400);
+  }
+
+  const result = (await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: actualClaimLocal,
+    reason: "Customer collected on a later afternoon",
+  }).expect(200)).body;
+  assert.equal(
+    DateTime.fromISO(result.claimedAt).setZone(zone).toFormat("yyyy-MM-dd'T'HH:mm"),
+    actualClaimLocal,
+  );
+  assert.equal(result.status, "CLAIMED");
+  assert.equal(result.paymentStatus, "PAID");
+  assert.equal(result.createdAt, receivedAt);
+  assert.equal(result.payment.createdAt, paidAt);
+  assert.equal(result.total, total);
+  assert.equal(await db.payment.count({ where: { orderId: order.id } }), 1);
+  assert.equal(await db.orderStatusHistory.count({ where: { orderId: order.id } }), beforeStatusCount);
+  const savedEvent = await db.orderStatusHistory.findUnique({ where: { id: oldStatusEvent.id } });
+  assert.equal(savedEvent.createdAt.toISOString(), result.claimedAt);
+  const history = (await admin.get("/api/orders/" + order.id).expect(200)).body;
+  const audit = history.transactionHistory.find(h => h.action === "CLAIM_DATE_CORRECTED");
+  assert.equal(audit.metadata.previousClaimedAt, oldClaimedAt);
+  assert.equal(audit.metadata.actualClaimedAt, result.claimedAt);
+  assert.equal(audit.metadata.originalClaimStatusEventAt, oldStatusEvent.createdAt.toISOString());
+  assert.equal(audit.metadata.paymentDateUnchanged, paidAt);
+  assert.equal(audit.metadata.receivedDateUnchanged, receivedAt);
+  assert.equal(audit.metadata.reason, "Customer collected on a later afternoon");
+  assert.equal(audit.metadata.reportingDateChanged, true);
+  assert.equal((await admin.get("/api/dashboard?date=" + originalDate).expect(200)).body.claimedToday,
+    beforeOriginal);
+  assert.equal((await admin.get("/api/dashboard?date=" + actualDate).expect(200)).body.claimedToday,
+    beforeActual + 1);
+
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: actualClaimLocal, reason: "No duplicate corrections",
+  }).expect(400);
+  const listed = (await admin.get("/api/orders?view=transactions&q=" +
+    encodeURIComponent(order.orderNumber)).expect(200)).body;
+  assert.equal(listed.total, 1);
+  assert.equal(listed.rows[0].claimedAt, result.claimedAt);
+});
+
+test("44 claim-date correction rejects unclaimed/deleted records and predating latest Ready", async () => {
+  const zone = "Asia/Manila";
+  const historicalDate = DateTime.now().setZone(zone).minus({ days: 4 }).toISODate();
+  const earlier = DateTime.now().setZone(zone).minus({ days: 6 }).toISODate();
+  const order = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(), historicalDate,
+    customerId: customer.id, status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: historicalDate + "T15:00", reason: "Attempt before claimed",
+  }).expect(409);
+  const firstClaimed = (await call(admin, ac, "post", "/orders/" + order.id + "/status", {
+    status: "CLAIMED",
+  }).expect(200)).body;
+  await call(admin, ac, "post", "/orders/" + order.id + "/reopen", {
+    reason: "Mistaken claim needs another pickup",
+  }).expect(200);
+  const reclaimed = (await call(admin, ac, "post", "/orders/" + order.id + "/status", {
+    status: "CLAIMED",
+  }).expect(200)).body;
+  assert.equal(reclaimed.status, "CLAIMED");
+  assert.notEqual(reclaimed.claimedAt, firstClaimed.claimedAt);
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: historicalDate + "T15:00",
+    reason: "Invalid earlier than reopening",
+  }).expect(400);
+
+  await call(admin, ac, "delete", "/orders/" + order.id, {}).expect(200);
+  await call(admin, ac, "put", "/orders/" + order.id + "/claimed-at", {
+    claimedAtLocal: earlier + "T14:00", reason: "Attempt on deleted transaction",
+  }).expect(409);
+});

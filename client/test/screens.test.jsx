@@ -438,3 +438,51 @@ test("Laundry Staff cannot see received-date correction button on a claimed reco
   await screen.findByRole("heading",{name:claimed.customerName});
   expect(screen.queryByRole("button",{name:"Edit received date/time"})).toBeNull();
 });
+
+test("Admin can edit claim date and time on a claimed transaction", async () => {
+  const customer = await post("/customers", {
+    name: prefix+" Claim Date Editor", phone: "09123456789",
+  });
+  const services=(await adminAgent.get("/api/services")).body;
+  const service=services.find(s=>s.name==="Wash & Fold")||services[0];
+  const oldDay=new Date(Date.now()-10*24*60*60*1000).toISOString().slice(0,10);
+  const newDay=new Date(Date.now()-5*24*60*60*1000).toISOString().slice(0,10);
+  const created=await post("/orders/historical",{
+    requestKey:randomUUID(),historicalDate:oldDay,customerId:customer.id,
+    status:"CLAIMED",items:[{serviceId:service.id,actualQuantity:"1",express:false}],
+    payment:{method:"CASH"},
+  });
+  const receivedDate=created.createdAt;
+  const paymentDate=created.payment.createdAt;
+  const ui=userEvent.setup();
+  mount(<OrderDetail id={created.id} onClose={()=>{}}/>);
+  await ui.click(await screen.findByRole("button",{name:"Edit claim date/time"}));
+  expect(screen.getByText("Correct when the laundry was claimed")).toBeTruthy();
+  expect(screen.getByLabelText("Actual claim date and time").type).toBe("datetime-local");
+  expect(screen.getByRole("button",{name:"Save claim date"}).disabled).toBe(true);
+  fireEvent.change(screen.getByLabelText("Actual claim date and time"),{
+    target:{value:newDay+"T15:35"},
+  });
+  await ui.type(screen.getByLabelText("Reason for claim date correction"),
+    "Customer collected on a different date");
+  expect(screen.getByRole("button",{name:"Save claim date"}).disabled).toBe(false);
+  await ui.click(screen.getByRole("button",{name:"Save claim date"}));
+  await waitFor(async()=>{
+    const saved=(await adminAgent.get("/api/orders/"+created.id).expect(200)).body;
+    expect(saved.status).toBe("CLAIMED");
+    expect(saved.createdAt).toBe(receivedDate);
+    expect(saved.payment.createdAt).toBe(paymentDate);
+    expect(saved.claimedAt).not.toBe(created.claimedAt);
+    expect(saved.transactionHistory.some(x=>x.action==="CLAIM_DATE_CORRECTED")).toBe(true);
+  });
+});
+
+test("Laundry Staff cannot edit the claim date", async()=>{
+  activeAgent=staffAgent;setCsrf(staffCsrf);
+  const claimed=(await staffAgent.get("/api/orders?view=transactions")).body.rows
+    .find(order=>order.status==="CLAIMED");
+  expect(claimed).toBeTruthy();
+  mount(<OrderDetail id={claimed.id} onClose={()=>{}}/>,staffUser,false);
+  await screen.findByRole("heading",{name:claimed.customerName});
+  expect(screen.queryByRole("button",{name:"Edit claim date/time"})).toBeNull();
+});
