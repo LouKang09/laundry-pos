@@ -14,6 +14,7 @@ import { priceAddons, consumeAddons } from "./addons.js";
 import { admin } from "./auth.js";
 import { decodePaymentReceipt } from "./payment-receipt.js";
 import { DateTime } from "luxon";
+import { resolvePaymentTime } from "./payment-time.js";
 export const orders = Router();
 export const orderInclude = {
   items: { orderBy: { id: "asc" } },
@@ -44,10 +45,13 @@ async function getOrder(tx, id) {
   if (!o) fail(404, "Order not found");
   return o;
 }
-async function receive(tx, order, userId, payment) {
+async function receive(tx, order, userId, payment, userRole) {
   if (order.status === "CANCELLED")
     fail(409, "Cancelled orders cannot receive payment");
   if (order.paymentStatus === "PAID") fail(409, "This order is already paid");
+  if (payment.paidAtLocal && userRole !== "ADMIN")
+    fail(403, "Only Admin can enter a historical payment date");
+  const paidAt = await resolvePaymentTime(tx, payment.paidAtLocal, order.createdAt);
   const receipt = decodePaymentReceipt(payment.receiptDataUrl);
   await tx.payment.create({
     data: {
@@ -57,6 +61,7 @@ async function receive(tx, order, userId, payment) {
       provider: payment.method === "OTHERS" ? payment.provider : null,
       reference: payment.method !== "CASH" ? payment.reference : null,
       amount: order.total,
+      ...(paidAt ? { createdAt: paidAt } : {}),
       ...receipt,
     },
   });
@@ -68,6 +73,7 @@ async function receive(tx, order, userId, payment) {
     method: payment.method,
     ...(payment.provider ? { provider: payment.provider } : {}),
     amount: order.total.toString(),
+    ...(paidAt ? { actualPaidAt: paidAt.toISOString() } : {}),
   });
 }
 async function consume(tx, order, userId) {
@@ -182,7 +188,7 @@ orders.post("/", async (req, res) => {
       orderNumber,
       total: total.toString(),
     });
-    if (data.payment) await receive(tx, o, req.user.id, data.payment);
+    if (data.payment) await receive(tx, o, req.user.id, data.payment, req.user.role);
     return getOrder(tx, o.id);
   });
   res.status(201).json(result);
@@ -471,14 +477,18 @@ orders.put("/:id/payment", async (req, res) => {
     const before = order.payment;
     const newProvider = payment.method === "OTHERS" ? payment.provider : null;
     const newReference = payment.method === "CASH" ? null : payment.reference;
+    if (payment.paidAtLocal && req.user.role !== "ADMIN")
+      fail(403, "Only Admin can correct the recorded payment date");
+    const paidAt = await resolvePaymentTime(tx, payment.paidAtLocal, order.createdAt);
+    const dateChanged = !!paidAt && paidAt.getTime() !== new Date(before.createdAt).getTime();
     const changed = before.method !== payment.method ||
       (before.provider || null) !== newProvider ||
       (before.reference || null) !== newReference;
     const newReceipt = payment.receiptDataUrl
       ? decodePaymentReceipt(payment.receiptDataUrl)
       : null;
-    if (!changed && !newReceipt)
-      fail(400, "Choose a different payment method or update the receipt proof");
+    if (!changed && !newReceipt && !dateChanged)
+      fail(400, "Change the payment date, method, reference, or receipt proof");
 
     // When changing payment details, old proof must not be presented as
     // evidence for the replacement method/reference.
@@ -489,23 +499,28 @@ orders.put("/:id/payment", async (req, res) => {
         method: payment.method,
         provider: newProvider,
         reference: newReference,
+        ...(dateChanged ? { createdAt: paidAt } : {}),
         receiptMime: newReceipt?.receiptMime ?? (keepReceipt ? before.receiptMime : null),
         receiptImage: newReceipt?.receiptImage ?? (keepReceipt ? undefined : null),
       },
     });
-    await audit(tx, req.user.id, "PAYMENT_METHOD_CORRECTED", "Order", order.id, {
+    await audit(tx, req.user.id, !changed && !newReceipt && dateChanged
+      ? "PAYMENT_DATE_CORRECTED" : "PAYMENT_METHOD_CORRECTED", "Order", order.id, {
       orderNumber: order.orderNumber,
       before: {
         method: before.method,
         provider: before.provider || null,
         reference: before.reference || null,
+        paidAt: new Date(before.createdAt).toISOString(),
       },
       after: {
         method: payment.method,
         provider: newProvider,
         reference: newReference,
+        paidAt: dateChanged ? paidAt.toISOString() : new Date(before.createdAt).toISOString(),
       },
       amount: order.total.toString(),
+      paymentDateCorrected: dateChanged,
       receiptProofReplaced: !!newReceipt,
       receiptProofCleared: changed && !newReceipt && !!before.receiptMime,
     });
@@ -520,7 +535,7 @@ orders.post("/:id/payment", async (req, res) => {
     await atomic(async (tx) => {
       const o = await getOrder(tx, req.params.id);
       if (o.deletedAt) fail(409, "Deleted transactions cannot receive payment");
-      await receive(tx, o, req.user.id, payment);
+      await receive(tx, o, req.user.id, payment, req.user.role);
       return getOrder(tx, o.id);
     }),
   );

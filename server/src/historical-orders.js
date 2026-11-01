@@ -8,6 +8,7 @@ import { priceItem, workflow } from "./pricing.js";
 import { priceAddons } from "./addons.js";
 import { z, decimal, paymentSchema, addonSchema, text } from "./validation.js";
 import { decodePaymentReceipt } from "./payment-receipt.js";
+import { resolvePaymentTime } from "./payment-time.js";
 
 export const historicalOrders = Router();
 
@@ -80,6 +81,9 @@ historicalOrders.post("/historical", admin, async (req, res) => {
     const historicalAt = isToday
       ? DateTime.now().setZone(cfg.timezone)
       : selectedDay.plus({ hours: 12 });
+    const actualPaidAt = data.payment?.paidAtLocal
+      ? await resolvePaymentTime(tx, data.payment.paidAtLocal, historicalAt.toJSDate())
+      : null;
     const turnaroundHours = lines.every((l) => l.express)
       ? cfg.expressHours
       : cfg.regularHours;
@@ -137,7 +141,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
                       ? data.payment.reference
                       : null,
                   amount: total,
-                  createdAt: historicalAt.toJSDate(),
+                  createdAt: actualPaidAt || historicalAt.toJSDate(),
                   ...decodePaymentReceipt(data.payment.receiptDataUrl),
                 },
               },
@@ -153,6 +157,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
       status: data.status,
       paymentMethod: data.payment?.method || "UNPAID",
       paymentProvider: data.payment?.provider || null,
+      ...(data.payment ? { actualPaidAt: (actualPaidAt || historicalAt.toJSDate()).toISOString() } : {}),
       total: total.toString(),
       inventoryAdjusted: false,
     });

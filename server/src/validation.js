@@ -100,6 +100,9 @@ export const paymentSchema = z
     provider: z.enum(["MAYA", "MARIBANK", "GOTYME", "BPI"]).optional(),
     reference: z.string().trim().min(3).max(100).optional(),
     receiptDataUrl: z.string().max(3500000).optional(),
+    // Only Admin can supply this local shop timestamp. Without it, payments
+    // use the time the payment was received, preserving staff POS behavior.
+    paidAtLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Enter payment date and time").optional(),
   })
   .strict()
   .refine(v => v.method === "CASH" || !!v.reference, {
