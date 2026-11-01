@@ -344,7 +344,7 @@ test("Transactions page describes and loads the complete claimed history for lau
 test("Admin Transactions displays real database counts and navigation to missing-status records", async () => {
   mount(<OrderList mode="transactions"/>);
   expect(await screen.findByText("Transaction reconciliation")).toBeTruthy();
-  expect(screen.getByText("Currently claimed")).toBeTruthy();
+  expect(await screen.findByText("Currently claimed")).toBeTruthy();
   expect(screen.getByText("Ready for pickup")).toBeTruthy();
   expect(screen.getByText("Deleted claimed")).toBeTruthy();
   expect(screen.getByText("Other active stages")).toBeTruthy();
