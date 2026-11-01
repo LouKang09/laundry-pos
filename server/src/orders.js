@@ -628,6 +628,88 @@ orders.post("/:id/payment", async (req, res) => {
     }),
   );
 });
+// Correct the actual pickup/claim time without changing the workflow status,
+// payment timestamp, received date, stock, or amount. Keep the original value
+// and user-supplied reason in an immutable audit event.
+orders.put("/:id/claimed-at", admin, async (req, res) => {
+  const { claimedAtLocal, reason } = z.object({
+    claimedAtLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Enter the claim date and time"),
+    reason: z.string().trim().min(5, "Explain why the claim date is being corrected").max(500),
+  }).strict().parse(req.body);
+  const result = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt || order.status !== "CLAIMED")
+      fail(409, "Only active claimed transactions can change their claim date");
+
+    const cfg = await business(tx);
+    const corrected = DateTime.fromISO(claimedAtLocal, { zone: cfg.timezone });
+    if (!corrected.isValid || corrected.toFormat("yyyy-MM-dd'T'HH:mm") !== claimedAtLocal)
+      fail(400, "Enter a valid claim date and time");
+    if (corrected.toMillis() > Date.now() + 60_000)
+      fail(400, "Claim date and time cannot be in the future");
+
+    // The latest CLAIMED status event represents the current claim (not an
+    // older claim which was reopened and subsequently claimed again).
+    const claimHistory = await tx.orderStatusHistory.findFirst({
+      where: { orderId: order.id, newStatus: "CLAIMED" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    const precedingReady = await tx.orderStatusHistory.findFirst({
+      where: {
+        orderId: order.id,
+        newStatus: "READY",
+        ...(claimHistory ? { createdAt: { lte: claimHistory.createdAt } } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+
+    // Form inputs have minute resolution. Compare local wall-clock minutes
+    // rather than sub-minute seconds from server-generated status timestamps.
+    const localMinute = date => date
+      ? DateTime.fromJSDate(date).setZone(cfg.timezone).toFormat("yyyy-MM-dd'T'HH:mm")
+      : null;
+    if (localMinute(order.createdAt) > claimedAtLocal)
+      fail(400, "Claim time cannot be earlier than the received time");
+    if (order.payment?.createdAt && localMinute(order.payment.createdAt) > claimedAtLocal)
+      fail(400, "Claim time cannot be earlier than payment. Correct the payment date first if needed.");
+    if (precedingReady && localMinute(precedingReady.createdAt) > claimedAtLocal)
+      fail(400, "Claim time cannot be earlier than the most recent Ready stage");
+
+    if (order.claimedAt && localMinute(order.claimedAt) === claimedAtLocal)
+      fail(400, "Select a different claim date and time");
+
+    const claimedAt = corrected.toJSDate();
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: { claimedAt },
+      include: orderInclude,
+    });
+    if (claimHistory) {
+      // Keep the visible status timeline consistent with the corrected claim.
+      // The audit record below preserves both original timestamps.
+      await tx.orderStatusHistory.update({
+        where: { id: claimHistory.id },
+        data: { createdAt: claimedAt },
+      });
+    }
+    await audit(tx, req.user.id, "CLAIM_DATE_CORRECTED", "Order", order.id, {
+      orderNumber: order.orderNumber,
+      previousClaimedAt: order.claimedAt?.toISOString() || null,
+      actualClaimedAt: claimedAt.toISOString(),
+      originalClaimStatusEventAt: claimHistory?.createdAt.toISOString() || null,
+      reason,
+      paymentDateUnchanged: order.payment?.createdAt.toISOString() || null,
+      receivedDateUnchanged: order.createdAt.toISOString(),
+      totalUnchanged: order.total.toString(),
+      statusUnchanged: order.status,
+      reportingDateChanged: localMinute(order.claimedAt)?.slice(0, 10)
+        !== claimedAtLocal.slice(0, 10),
+    });
+    return updated;
+  });
+  res.json(result);
+});
+
 // Explicit Admin correction of an accidental claim. Never reverse payment,
 // stock consumption or the original order date. A new claim uses the existing
 // READY -> CLAIMED workflow and records a fresh claimedAt timestamp.
