@@ -827,6 +827,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
     [scanError, setScanError] = useState(""),
     [scanBusy, setScanBusy] = useState(false);
   const { admin, notify } = useApp();
+  const [overview, setOverview] = useState(null);
+  const [overviewError, setOverviewError] = useState("");
+  const showOverview = mode === "transactions" && admin && !deletedOnly;
   const path =
     "/orders?q=" +
     encodeURIComponent(q) +
@@ -838,6 +841,15 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
     (deletedOnly ? "&deleted=1" : "");
   const { data, error, loading } = useData(path, rev);
   useEffect(() => setPage(1), [q, status, mode, deletedOnly]);
+  useEffect(() => {
+    if (!showOverview) { setOverview(null); setOverviewError(""); return; }
+    let active = true;
+    setOverviewError("");
+    api("/orders/transactions/overview")
+      .then(result => { if (active) setOverview(result); })
+      .catch(err => { if (active) setOverviewError(err.message); });
+    return () => { active = false; };
+  }, [showOverview, rev]);
   const title = deletedOnly
     ? "Deleted Transactions"
     : mode === "pickup"
@@ -875,6 +887,41 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
           Laundry Staff Orders shows today's Received, Washing, Drying, and Folding work only.
         </p>
       )}
+      {showOverview && (
+        <section className="panel transaction-overview">
+          <div className="section-title">
+            <div>
+              <h2>Transaction reconciliation</h2>
+              <p className="muted">
+                Current database totals across all dates. This helps identify
+                orders that have not reached Claimed or were moved to Deleted.
+              </p>
+            </div>
+          </div>
+          <ErrorBox message={overviewError} />
+          {overview ? (
+            <>
+              <div className="transaction-counts">
+                <div><span>Currently claimed</span><strong>{overview.claimed}</strong><small>Shown in Transactions</small></div>
+                <div><span>Ready for pickup</span><strong>{overview.ready}</strong><small>Not yet claimed</small></div>
+                <div><span>Other active stages</span><strong>{overview.active}</strong><small>Received through Folding</small></div>
+                <div><span>Deleted claimed</span><strong>{overview.deletedClaimed}</strong><small>Excluded from Transactions</small></div>
+              </div>
+              <p className="muted transaction-overview-note">
+                {overview.paidNotClaimed} paid {overview.paidNotClaimed === 1 ? "order is" : "orders are"} not yet
+                marked Claimed. {overview.formerlyClaimed} {overview.formerlyClaimed === 1 ? "order has" : "orders have"}
+                a previous Claimed event but a different current status.
+                {overview.missingClaimedAt > 0 && ` ${overview.missingClaimedAt} claimed records have no claim timestamp; they are still included.`}
+              </p>
+              <div className="actions transaction-overview-links">
+                <Link className="secondary" to="/pickup">View Ready orders</Link>
+                <Link className="secondary" to="/orders">View active orders</Link>
+                <Link className="secondary" to="/deleted-transactions">Review Deleted</Link>
+              </div>
+            </>
+          ) : (!overviewError ? <Loading /> : null)}
+        </section>
+      )}
       <section className="panel">
         <div className="filters">
           <SearchBox
@@ -882,6 +929,11 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
             onChange={setQ}
             placeholder="Search order #, customer, phone, or QR tracking link"
           />
+          {mode === "transactions" && q && (
+            <button className="secondary" type="button" onClick={() => setQ("")}>
+              Clear search
+            </button>
+          )}
           {mode === "orders" && (
             <select
               aria-label="Laundry status"
@@ -918,8 +970,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
         )}
         {mode === "transactions" && !deletedOnly && (
           <p className="muted">
-            Transactions contains all claimed orders, including earlier dates and
-            historical manual entries, for both Admin and Laundry Staff.
+            Transactions contains every currently claimed order, including earlier
+            dates and historical manual entries. Records in Ready or Deleted are not included.
+            {data && ` ${data.total} claimed ${data.total === 1 ? "record" : "records"} match the current search.`}
           </p>
         )}
         {deletedOnly && (
@@ -972,6 +1025,8 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
                   <td>
                     <Badge value={o.paymentStatus} />
                     <small>{o.payment?.provider || o.payment?.method || "—"}</small>
+                    {mode === "transactions" && o.payment?.createdAt &&
+                      <small>Paid: {date(o.payment.createdAt)}</small>}
                   </td>
                   <td><Badge value={o.status} /></td>
                   <td>
@@ -980,7 +1035,7 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
                   </td>
                   <td>
                     <button className="secondary" onClick={() => setSelected(o.id)}>
-                      {mode === "pickup" ? "Process" : "Open"}
+                      {mode === "pickup" ? "Process" : mode === "transactions" && admin && !deletedOnly ? "Manage" : "Open"}
                       <ArrowRight size={16} />
                     </button>
                   </td>
@@ -990,7 +1045,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
             <Pager page={page} total={data.total} onChange={setPage} />
           </>
         ) : (
-          <Empty>{deletedOnly ? "No deleted transactions yet." : "No matching orders."}</Empty>
+          <Empty>{deletedOnly ? "No deleted transactions yet." : mode === "transactions"
+            ? "No currently claimed transactions match this search. Check Ready, active orders, or Deleted (Admin)."
+            : "No matching orders."}</Empty>
         )}
       </section>
       {selected && (

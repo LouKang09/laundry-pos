@@ -743,7 +743,9 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [washingMachine, setWashingMachine] = useState(""),
     [cancel, setCancel] = useState(false),
     [editing, setEditing] = useState(false),
-    [confirmDelete, setConfirmDelete] = useState(false);
+    [confirmDelete, setConfirmDelete] = useState(false),
+    [reopenClaim, setReopenClaim] = useState(false),
+    [reopenReason, setReopenReason] = useState("");
   async function action(fn) {
     setBusy(true);
     setErr("");
@@ -873,7 +875,58 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 >
                   <Edit3 size={17} /> {admin ? "Edit payment details and date" : "Change payment method"}
                 </button>
-                {o.status === "CLAIMED" && <p className="muted small">Admin correction for completed transactions. Earlier details remain in the audit trail.</p>}
+                {o.status === "CLAIMED" && (
+                  <p className="muted small">
+                    Recorded paid: <strong>{date(o.payment.createdAt)}</strong>. Admin can correct
+                    when payment actually arrived. The original order date remains unchanged.
+                    Earlier values are retained in the audit trail.
+                  </p>
+                )}
+              </div>
+            )}
+            {admin && !o.deletedAt && o.status === "CLAIMED" && (
+              <div className="action-panel claim-reopen-panel">
+                <h3>Claimed transaction correction</h3>
+                <p className="muted">
+                  If this laundry was marked Claimed by mistake, return it to Ready
+                  so it appears in Pickup and can be claimed correctly later.
+                  Existing payment, receipt, price, and supply deductions stay unchanged.
+                </p>
+                {!reopenClaim ? (
+                  <button type="button" className="secondary" disabled={busy}
+                    onClick={() => { setReopenClaim(true); setReopenReason(""); }}>
+                    <Edit3 size={17} /> Return claimed order to Ready
+                  </button>
+                ) : (
+                  <div className="claim-reopen-confirmation">
+                    <Field label="Reason for reversing this claim">
+                      <textarea
+                        rows={3}
+                        maxLength={500}
+                        aria-label="Reason for reversing this claim"
+                        placeholder="e.g. Claimed by mistake; customer has not collected the laundry"
+                        value={reopenReason}
+                        onChange={(event) => setReopenReason(event.target.value)}
+                      />
+                    </Field>
+                    <div className="actions">
+                      <button type="button" className="secondary" disabled={busy}
+                        onClick={() => { setReopenClaim(false); setReopenReason(""); }}>
+                        Keep claimed
+                      </button>
+                      <button type="button" className="primary"
+                        disabled={busy || reopenReason.trim().length < 5}
+                        onClick={() => action(async () => {
+                          await post("/orders/" + id + "/reopen", { reason: reopenReason.trim() });
+                          setReopenClaim(false);
+                          setReopenReason("");
+                          notify("Transaction moved back to Ready. Payment is preserved.");
+                        })}>
+                        Confirm return to Ready
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {!o.deletedAt && o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
