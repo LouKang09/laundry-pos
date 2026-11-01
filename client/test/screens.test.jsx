@@ -435,6 +435,6 @@ test("Laundry Staff cannot see received-date correction button on a claimed reco
   const claimed=orders.find(o=>o.status==="CLAIMED");
   expect(claimed).toBeTruthy();
   mount(<OrderDetail id={claimed.id} onClose={()=>{}}/>,staffUser,false);
-  await screen.findByText("Received",{exact:false});
+  await screen.findByRole("heading",{name:claimed.customerName});
   expect(screen.queryByRole("button",{name:"Edit received date/time"})).toBeNull();
 });
