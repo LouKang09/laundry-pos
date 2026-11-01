@@ -2560,3 +2560,19 @@ td .actions {
   .transaction-overview-links > a { flex: 1 1 100%; text-align: center; }
   .claim-reopen-confirmation .actions > button { flex: 1 1 100%; }
 }
+
+/* Admin-only received timestamp correction: independent from payment date. */
+.received-date-display { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.received-date-edit-button { display: inline-flex; align-items: center; gap: 7px; min-height: 39px; padding: 8px 12px; font-size: .81rem; }
+.received-date-editor { margin: 18px 0; padding: clamp(18px, 2.3vw, 26px); border: 1px solid #b9d9d5; background: #f6fbfa; border-radius: 18px; }
+.received-date-editor h3 { margin: 0 0 8px; }
+.received-date-editor > div > p { max-width: 72ch; margin: 0 0 16px; line-height: 1.65; }
+.received-date-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.received-date-editor-grid input, .received-date-editor-grid textarea { width: 100%; min-height: 47px; background: #fff; color: var(--ink); border: 1px solid #cbdcda; border-radius: 12px; padding: 12px 14px; }
+.received-date-editor-grid textarea { resize: vertical; min-height: 90px; }
+.received-date-editor > .muted { display: block; margin: 14px 0 18px; line-height: 1.55; }
+.received-date-editor .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 680px) {
+ .received-date-editor-grid { grid-template-columns: 1fr; gap: 14px; }
+ .received-date-editor .actions > button { flex: 1 1 100%; }
+}

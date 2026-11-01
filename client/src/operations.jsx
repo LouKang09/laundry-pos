@@ -745,7 +745,10 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [editing, setEditing] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false),
     [reopenClaim, setReopenClaim] = useState(false),
-    [reopenReason, setReopenReason] = useState("");
+    [reopenReason, setReopenReason] = useState(""),
+    [receivedEditing, setReceivedEditing] = useState(false),
+    [receivedAtLocal, setReceivedAtLocal] = useState(""),
+    [receivedReason, setReceivedReason] = useState("");
   async function action(fn) {
     setBusy(true);
     setErr("");
@@ -760,6 +763,11 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     }
   }
   const next = o && stages[stages.indexOf(o.status) + 1];
+  const latestReceivedTime = o ? shopPaymentDateTime(new Date(Math.min(
+    Date.now(),
+    o.payment?.createdAt ? new Date(o.payment.createdAt).getTime() : Infinity,
+    o.claimedAt ? new Date(o.claimedAt).getTime() : Infinity,
+  ))) : "";
   useEffect(() => setWashingMachine(o?.washingMachine || ""), [o?.washingMachine]);
   return (
     <Modal title={o?.orderNumber || "Order details"} onClose={onClose} wide>
@@ -812,8 +820,22 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
               ))}
             </Table>
             <div className="detail-meta">
-              <p>
+              <p className="received-date-display">
                 Received <strong>{date(o.createdAt)}</strong>
+                {admin && !o.deletedAt && o.status !== "CANCELLED" && (
+                  <button
+                    type="button"
+                    className="secondary received-date-edit-button"
+                    disabled={busy}
+                    onClick={() => {
+                      setReceivedAtLocal(shopPaymentDateTime(o.createdAt));
+                      setReceivedReason("");
+                      setReceivedEditing(true);
+                    }}
+                  >
+                    <Edit3 size={15} /> Edit received date/time
+                  </button>
+                )}
               </p>
               <p>
                 Approximate pickup{" "}
@@ -851,6 +873,66 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 Total <strong>{cash(o.total)}</strong>
               </p>
             </div>
+            {admin && receivedEditing && !o.deletedAt && o.status !== "CANCELLED" && (
+              <div className="action-panel received-date-editor">
+                <div>
+                  <h3>Correct when the laundry was received</h3>
+                  <p className="muted">
+                    This updates the order's received date and the date used for order-based
+                    reporting. The payment date, claim status, charges, and inventory remain unchanged.
+                    The original value and your reason are saved in transaction history.
+                  </p>
+                </div>
+                <div className="received-date-editor-grid">
+                  <Field label="Actual received date and time">
+                    <input
+                      aria-label="Actual received date and time"
+                      type="datetime-local"
+                      max={latestReceivedTime}
+                      step="60"
+                      required
+                      value={receivedAtLocal}
+                      onChange={(e) => setReceivedAtLocal(e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Reason for the correction">
+                    <textarea
+                      aria-label="Reason for received date correction"
+                      rows={3}
+                      maxLength={500}
+                      placeholder="e.g. Laundry was dropped off the previous afternoon"
+                      value={receivedReason}
+                      onChange={(e) => setReceivedReason(e.target.value)}
+                    />
+                  </Field>
+                </div>
+                <p className="small muted">
+                  Received time cannot be in the future, after payment, or after pickup.
+                  To correct a payment that predates receipt, edit the payment date first.
+                </p>
+                <div className="actions">
+                  <button type="button" className="secondary" disabled={busy}
+                    onClick={() => { setReceivedEditing(false); setReceivedReason(""); }}>
+                    Cancel
+                  </button>
+                  <button type="button" className="primary"
+                    disabled={busy || !receivedAtLocal ||
+                      receivedAtLocal > latestReceivedTime ||
+                      receivedAtLocal === shopPaymentDateTime(o.createdAt) ||
+                      receivedReason.trim().length < 5}
+                    onClick={() => action(async () => {
+                      await put("/orders/" + id + "/received-at", {
+                        receivedAtLocal, reason: receivedReason.trim(),
+                      });
+                      setReceivedEditing(false);
+                      setReceivedReason("");
+                      notify("Received date updated; the original is saved in transaction history.");
+                    })}>
+                    Save received date
+                  </button>
+                </div>
+              </div>
+            )}
             {!o.deletedAt && o.status !== "CANCELLED" && o.paymentStatus === "PAID" && (admin || o.status !== "CLAIMED") && (
               <div className="action-panel">
                 <h3>Recorded payment</h3>
