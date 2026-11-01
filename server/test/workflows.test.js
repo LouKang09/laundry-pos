@@ -1096,3 +1096,121 @@ test("38 claimed transactions list all dates for staff and admin, without showin
   ).expect(200);
   assert.equal(staffOrders.body.total, 0);
 });
+
+test("39 admin can audit and reverse an accidental claim without erasing payment or duplicating completed-load reporting", async () => {
+  const zone = "Asia/Manila";
+  const historicalDate = DateTime.now().setZone(zone).minus({ days: 11 }).toISODate();
+  const original = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate,
+    customerId: customer.id,
+    status: "CLAIMED",
+    items: [{ serviceId: kg.id, actualQuantity: "3", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+  const originalPaidAt = new Date(original.payment.createdAt).getTime();
+  const originalTotal = original.total;
+  const originalCreatedAt = original.createdAt;
+  const previousClaimedAt = original.claimedAt;
+  assert.equal(original.status, "CLAIMED");
+
+  // Claimed is visible across every day to both roles. Admin sees an actual
+  // database reconciliation tally, not merely rows on the current page.
+  const before = (await admin.get("/api/orders/transactions/overview").expect(200)).body;
+  assert(before.claimed >= 1);
+  assert(before.activeOrderTotal >= before.claimed);
+  assert.equal(before.statuses.CLAIMED, before.claimed);
+  await staff.get("/api/orders/transactions/overview").expect(403);
+
+  const filtered = await staff.get(
+    "/api/orders?view=transactions&q=" + encodeURIComponent(original.orderNumber)
+  ).expect(200);
+  assert.equal(filtered.body.total, 1);
+  assert.equal(filtered.body.rows[0].id, original.id);
+
+  await call(staff, sc, "post", "/orders/" + original.id + "/reopen", {
+    reason: "Marked claimed by mistake",
+  }).expect(403);
+  await call(admin, ac, "post", "/orders/" + original.id + "/reopen", {
+    reason: "x",
+  }).expect(400);
+  const day = DateTime.now().setZone(zone).toISODate();
+  const beforeKg = (await admin.get("/api/reports?period=Daily&date=" + day).expect(200)).body.kilograms;
+
+  const reopened = (await call(admin, ac, "post", "/orders/" + original.id + "/reopen", {
+    reason: "Customer has not picked up the laundry",
+  }).expect(200)).body;
+  assert.equal(reopened.status, "READY");
+  assert.equal(reopened.claimedAt, null);
+  assert.equal(reopened.paymentStatus, "PAID");
+  assert.equal(new Date(reopened.payment.createdAt).getTime(), originalPaidAt);
+  assert.equal(reopened.total, originalTotal);
+  assert.equal(reopened.createdAt, originalCreatedAt);
+  assert.equal(await db.payment.count({ where: { orderId: original.id } }), 1);
+  const afterKg = (await admin.get("/api/reports?period=Daily&date=" + day).expect(200)).body.kilograms;
+  assert.equal(afterKg, beforeKg, "Reversing a claim must not count laundry as processed again");
+
+  const statusHistory = await admin.get("/api/orders/" + original.id).expect(200);
+  const reverted = statusHistory.body.statusHistory.at(-1);
+  assert.equal(reverted.oldStatus, "CLAIMED");
+  assert.equal(reverted.newStatus, "READY");
+  assert(statusHistory.body.transactionHistory.some(h =>
+    h.action === "CLAIM_REOPENED" &&
+    h.metadata?.previousClaimedAt === previousClaimedAt &&
+    h.metadata?.reason === "Customer has not picked up the laundry"));
+
+  const after = (await admin.get("/api/orders/transactions/overview").expect(200)).body;
+  assert.equal(after.claimed, before.claimed - 1);
+  assert.equal(after.ready, before.ready + 1);
+  assert(after.formerlyClaimed >= 1);
+  const invisible = await admin.get(
+    "/api/orders?view=transactions&q=" + encodeURIComponent(original.orderNumber)
+  ).expect(200);
+  assert.equal(invisible.body.total, 0);
+  const inPickup = await staff.get(
+    "/api/orders?view=pickup&q=" + encodeURIComponent(original.orderNumber)
+  ).expect(200);
+  assert.equal(inPickup.body.total, 1);
+
+  await call(admin, ac, "post", "/orders/" + original.id + "/reopen", {
+    reason: "Do not double-reopen",
+  }).expect(409);
+
+  // The normal ready -> claimed flow works with the payment already on file.
+  const reclaimed = (await call(staff, sc, "post", "/orders/" + original.id + "/status", {
+    status: "CLAIMED",
+  }).expect(200)).body;
+  assert.equal(reclaimed.status, "CLAIMED");
+  assert(reclaimed.claimedAt);
+  assert.notEqual(reclaimed.claimedAt, previousClaimedAt);
+  assert.equal(await db.payment.count({ where: { orderId: original.id } }), 1);
+  const visible = await staff.get(
+    "/api/orders?view=transactions&q=" + encodeURIComponent(original.orderNumber)
+  ).expect(200);
+  assert.equal(visible.body.total, 1);
+  assert.equal(visible.body.rows[0].status, "CLAIMED");
+});
+
+test("40 transactions overview accurately distinguishes paid but unclaimed, Ready, Deleted and historic Claimed", async () => {
+  const zone = "Asia/Manila";
+  const day = DateTime.now().setZone(zone).minus({ days: 12 }).toISODate();
+  const ready = (await call(admin, ac, "post", "/orders/historical", {
+    requestKey: crypto.randomUUID(),
+    historicalDate: day,
+    customerId: customer.id,
+    status: "READY",
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: false }],
+    payment: { method: "CASH" },
+  }).expect(201)).body;
+
+  const overview = (await admin.get("/api/orders/transactions/overview").expect(200)).body;
+  assert(overview.ready >= 1);
+  assert(overview.paidNotClaimed >= 1);
+  assert(overview.activeOrderTotal >= overview.claimed + overview.ready);
+  assert.equal((await admin.get(
+    "/api/orders?view=transactions&q=" + encodeURIComponent(ready.orderNumber)
+  ).expect(200)).body.total, 0);
+  assert.equal((await admin.get(
+    "/api/orders?view=pickup&q=" + encodeURIComponent(ready.orderNumber)
+  ).expect(200)).body.total, 1);
+});
