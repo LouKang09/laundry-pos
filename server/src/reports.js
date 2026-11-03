@@ -6,6 +6,25 @@ import { admin } from "./auth.js";
 import { business } from "./orders.js";
 export const reporting = Router();
 const sum = (rows, key) => rows.reduce((s, r) => s.add(r[key]), new D(0));
+
+const PAYMENT_CHANNELS = ["CASH", "GCASH", "MAYA", "MARIBANK", "GOTYME", "BPI", "OTHER_BANKS"];
+function channelFor(payment) {
+  if (payment.method === "CASH") return "CASH";
+  if (payment.method === "GCASH") return "GCASH";
+  const provider = String(payment.provider || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return PAYMENT_CHANNELS.includes(provider) && provider !== "CASH" && provider !== "GCASH"
+    ? provider : "OTHER_BANKS";
+}
+function paymentBreakdown(payments) {
+  const totals = new Map(PAYMENT_CHANNELS.map(method => [method, { method, count: 0, amount: new D(0) }]));
+  for (const payment of payments) {
+    const row = totals.get(channelFor(payment));
+    row.count++;
+    row.amount = row.amount.add(payment.amount);
+  }
+  return Array.from(totals.values(), p => ({ method: p.method, count: p.count, amount: p.amount.toFixed(2) }));
+}
+
 export function periodRange(period, date, zone) {
   const d = DateTime.fromISO(date, { zone });
   const unit = {
@@ -97,14 +116,7 @@ async function report(from, to) {
     expenses: expense.toFixed(2),
     estimatedProfit: gross.sub(expense).toFixed(2),
     paymentsReceived: sum(payments, "amount").toFixed(2),
-    paymentMethods: [
-      { method: "CASH" }, { method: "GCASH" },
-      ...["MAYA", "MARIBANK", "GOTYME", "BPI"].map(provider => ({ method: "OTHERS", provider })),
-    ].map(({ method, provider }) => ({
-      method: provider || method,
-      amount: sum(payments.filter(p =>
-        p.method === method && (!provider || p.provider === provider)), "amount").toFixed(2),
-    })),
+    paymentMethods: paymentBreakdown(payments),
     services: Object.values(services),
     staff: Object.values(staff),
     trend: Object.values(trend).sort((a, b) => a.date.localeCompare(b.date)),
@@ -312,7 +324,7 @@ reporting.get("/reports/customer-activity", admin, async (req, res) => {
       paymentStatus: true, createdAt: true, claimedAt: true,
     }, orderBy: { createdAt: "desc" } }),
     db.payment.findMany({ where: { createdAt: range, order: base }, select: {
-      id: true, amount: true, createdAt: true, order: { select: {
+      id: true, amount: true, method: true, provider: true, createdAt: true, order: { select: {
         orderNumber: true, customerName: true, status: true, paymentStatus: true,
       } },
     }, orderBy: { createdAt: "desc" } }),
@@ -340,5 +352,6 @@ reporting.get("/reports/customer-activity", admin, async (req, res) => {
     unclaimed: unclaimed.length, unpaid: unpaid.length,
     paymentsAmount: sum(paid, "amount").toFixed(2) };
   res.json({ from: from.toISO(), to: to.toISO(), timezone: cfg.timezone, counts,
+    paymentMethods: paymentBreakdown(paid),
     rows: rows.sort((a,b) => new Date(b.occurredAt) - new Date(a.occurredAt)) });
 });
