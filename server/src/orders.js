@@ -227,17 +227,47 @@ orders.get("/", async (req, res) => {
       fail(400, "Pickup only shows Ready orders");
     scope = { status: "READY" };
   } else if (view === "transactions") {
-    if (!deletedView && requestedStatus && requestedStatus !== "CLAIMED")
-      fail(400, "Transactions only shows Claimed orders");
+    if (!deletedView && requestedStatus && !workflow.includes(requestedStatus))
+      fail(400, "Invalid transaction status");
     // Transactions is the permanent claim ledger for both Admin and Staff.
     // Restricting Staff to claimedAt=today hid past and historical transactions
     // even though those claimed orders still existed in the database.
-    scope = deletedView ? {} : { status: "CLAIMED" };
+    scope = deletedView ? {} : req.query.activity ? {} : { status: "CLAIMED" };
   } else {
     scope = {
       ...(requestedStatus ? { status: requestedStatus } : {}),
       ...(staffToday ? { createdAt: today } : {}),
     };
+  }
+  // Activity filters use actual payment/claim timestamps; order-date filters
+  // describe the received cohort. Keep deleted records out of normal results.
+  const activity = view === "transactions" && !deletedView
+    ? z.enum(["ALL", "CLAIMED", "PAID", "UNPAID", "UNCLAIMED", "READY", "RECEIVED", "WASHING", "DRYING", "FOLDING", "CANCELLED"])
+        .parse(req.query.activity || "CLAIMED")
+    : null;
+  let activityDate = null;
+  if (activity && req.query.period) {
+    const period = z.enum(["Daily", "Weekly", "Monthly", "Yearly", "Custom"]).parse(req.query.period);
+    const zone = cfg.timezone;
+    let start, end;
+    if (period === "Custom") {
+      start = DateTime.fromISO(z.iso.date().parse(req.query.from), {zone}).startOf("day");
+      end = DateTime.fromISO(z.iso.date().parse(req.query.to), {zone}).startOf("day").plus({days:1});
+      if (end <= start) fail(400, "Invalid custom date range");
+    } else {
+      const d = DateTime.fromISO(z.iso.date().parse(req.query.date || from.toISODate()), {zone});
+      const unit = {Daily:"day",Weekly:"week",Monthly:"month",Yearly:"year"}[period];
+      start=d.startOf(unit);
+      end=start.plus({[unit+"s"]:1});
+    }
+    activityDate = {gte:start.toJSDate(),lt:end.toJSDate()};
+  }
+  if (activity) {
+    if (activity === "CLAIMED") scope = {status:"CLAIMED",...(activityDate?{claimedAt:activityDate}:{})};
+    else if (activity === "PAID") scope = {paymentStatus:"PAID",...(activityDate?{payment:{is:{createdAt:activityDate}}}:{})};
+    else if (activity === "UNPAID") scope = {paymentStatus:"UNPAID",status:{not:"CANCELLED"},...(activityDate?{createdAt:activityDate}:{})};
+    else if (activity === "UNCLAIMED") scope = {status:{notIn:["CLAIMED","CANCELLED"]},...(activityDate?{createdAt:activityDate}:{})};
+    else scope = {...(activity==="ALL"?{}:{status:activity}),...(activityDate?{createdAt:activityDate}:{})};
   }
   const where = {
     ...scope,
@@ -262,7 +292,7 @@ orders.get("/", async (req, res) => {
       include: orderInclude,
       orderBy:
         view === "transactions"
-          ? [{ claimedAt: "desc" }, { createdAt: "desc" }]
+          ? activity === "PAID" ? [{ createdAt: "desc" }] : [{ claimedAt: "desc" }, { createdAt: "desc" }]
           : { createdAt: "desc" },
       take: 30,
       skip: (page - 1) * 30,
