@@ -30,7 +30,7 @@ import {
   NewOrder as BaseNewOrder,
   OrderDetail,
 } from "./operations";
-import { printReport, reportQuery } from "./report-print";
+import { reportQuery } from "./report-print";
 import { downloadBusinessReport } from "./pdf-export";
 import { SalesAnalytics } from "./sales-analytics";
 import { CustomerActivity, ActivityFilters, businessToday } from "./customer-activity";
@@ -178,35 +178,20 @@ function ReportPrintControls() {
           onChange={(e) => setDay(e.target.value)}
         />
       )}
-      <button
-        className="secondary"
-        disabled={busy}
+      <button className="secondary" type="button" disabled={busy}
         onClick={async () => {
           setBusy(true);
           try {
-            await printReport(
-              api,
-              { period, date: day, from, to },
-              settings.name,
-            );
+            const data = await api(reportQuery({ period, date: day, from, to }));
+            downloadBusinessReport(data, settings.name);
           } catch (error) {
             notify(error.message);
           } finally {
             setBusy(false);
           }
-        }}
-      >
-        {busy ? "Preparing…" : "Print report"}
+        }}>
+        {busy ? "Preparing report…" : "Download Report"}
       </button>
-      <button className="secondary" type="button" disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            const data = await api(reportQuery({period,date:day,from,to}));
-            downloadBusinessReport(data,settings.name);
-          } catch (error) { notify(error.message); }
-          finally { setBusy(false); }
-        }}>Download PDF</button>
     </div>
   );
 }
@@ -489,7 +474,7 @@ export function Dashboard() {
               <section className="panel" style={{ marginTop: 18 }}>
                 <div className="section-title" style={{ marginTop: 0 }}>
                   <div>
-                    <h3>Print business report</h3>
+                    <h3>Download business report</h3>
                     <span className="muted">
                       Daily, weekly, monthly, or custom range
                     </span>
