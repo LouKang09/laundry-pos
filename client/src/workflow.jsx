@@ -32,7 +32,7 @@ import {
 } from "./operations";
 import { printReport } from "./report-print";
 import { SalesAnalytics } from "./sales-analytics";
-import { CustomerActivity } from "./customer-activity";
+import { CustomerActivity, ActivityFilters, businessToday } from "./customer-activity";
 
 const activeStages = ["RECEIVED", "WASHING", "DRYING", "FOLDING"];
 const today = () =>
@@ -815,6 +815,12 @@ export function StaffQrWorkflow() {
   );
 }
 export function OrderList({ mode = "orders", deletedOnly = false }) {
+  const [activity, setActivity] = useState("CLAIMED");
+  const [activityPeriod, setActivityPeriod] = useState("Daily");
+  const [activityDay, setActivityDay] = useState(businessToday());
+  const [activityFrom, setActivityFrom] = useState(businessToday());
+  const [activityTo, setActivityTo] = useState(businessToday());
+
   const initialStatus = new URLSearchParams(location.search).get("status") || "";
   const [q, setQ] = useState(""),
     [status, setStatus] = useState(
@@ -840,9 +846,10 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
     "&view=" +
     mode +
     (mode === "orders" && status ? "&status=" + status : "") +
-    (deletedOnly ? "&deleted=1" : "");
+    (deletedOnly ? "&deleted=1" : "") +
+    (mode === "transactions" && !deletedOnly ? "&activity=" + activity + "&period=" + activityPeriod + (activityPeriod === "Custom" ? "&from=" + activityFrom + "&to=" + activityTo : "&date=" + activityDay) : "");
   const { data, error, loading } = useData(path, rev);
-  useEffect(() => setPage(1), [q, status, mode, deletedOnly]);
+  useEffect(() => setPage(1), [q, status, mode, deletedOnly, activity, activityPeriod, activityDay, activityFrom, activityTo]);
   useEffect(() => {
     if (!showOverview) { setOverview(null); setOverviewError(""); return; }
     let active = true;
@@ -936,6 +943,12 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
               Clear search
             </button>
           )}
+          {mode === "transactions" && !deletedOnly && <>
+            <select aria-label="Transaction activity filter" value={activity} onChange={e=>setActivity(e.target.value)}>
+              {[["ALL","All transactions"],["CLAIMED","Claimed"],["PAID","Paid"],["UNPAID","Unpaid"],["UNCLAIMED","Unclaimed"],["READY","Ready for pickup"],["RECEIVED","Received"],["WASHING","Washing"],["DRYING","Drying"],["FOLDING","Folding"],["CANCELLED","Cancelled"]].map(([value,name])=><option key={value} value={value}>{name}</option>)}
+            </select>
+            <ActivityFilters period={activityPeriod} setPeriod={setActivityPeriod} day={activityDay} setDay={setActivityDay} from={activityFrom} setFrom={setActivityFrom} to={activityTo} setTo={setActivityTo}/>
+          </>}
           {mode === "orders" && (
             <select
               aria-label="Laundry status"
@@ -972,9 +985,9 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
         )}
         {mode === "transactions" && !deletedOnly && (
           <p className="muted">
-            Transactions contains every currently claimed order, including earlier
-            dates and historical manual entries. Records in Ready or Deleted are not included.
-            {data && ` ${data.total} claimed ${data.total === 1 ? "record" : "records"} match the current search.`}
+            Filter by claim date for Claimed, payment date for Paid, or received date for other statuses.
+            Unclaimed and unpaid reflect current statuses of orders received in the period.
+            {data && ` ${data.total} ${data.total === 1 ? "record" : "records"} match the current filters.`}
           </p>
         )}
         {deletedOnly && (
