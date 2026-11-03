@@ -16,6 +16,7 @@ import {
 } from "./ui";
 import { printReport, reportQuery } from "./report-print";
 import { CustomerActivity } from "./customer-activity";
+import { downloadBusinessReport } from "./pdf-export";
 
 const localDay = () =>
   new Date().toLocaleDateString("en-CA", {
@@ -27,7 +28,8 @@ export function Reports() {
     [day, setDay] = useState(localDay()),
     [from, setFrom] = useState(localDay()),
     [to, setTo] = useState(localDay()),
-    [printing, setPrinting] = useState(false);
+    [printing, setPrinting] = useState(false),
+    [downloading, setDownloading] = useState(false);
   const { settings, notify } = useApp();
   const filters = { period, date: day, from, to };
   const path = reportQuery(filters);
@@ -84,6 +86,10 @@ export function Reports() {
           }}
         >
           <Printer size={18} /> {printing ? "Preparing…" : "Print report"}
+        </button>
+        <button className="secondary" type="button" disabled={downloading}
+          onClick={async () => {setDownloading(true);try {const report=await api(path);downloadBusinessReport(report,settings.name);}catch(e){notify(e.message);}finally{setDownloading(false);}}}>
+          {downloading ? "Preparing PDF…" : "Download PDF"}
         </button>
       </PageHead>
       <ErrorBox message={error} />
