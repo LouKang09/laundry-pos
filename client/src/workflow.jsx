@@ -32,6 +32,7 @@ import {
 } from "./operations";
 import { printReport } from "./report-print";
 import { SalesAnalytics } from "./sales-analytics";
+import { CustomerActivity } from "./customer-activity";
 
 const activeStages = ["RECEIVED", "WASHING", "DRYING", "FOLDING"];
 const today = () =>
@@ -439,6 +440,7 @@ export function Dashboard() {
               />
             </div>
 
+            {admin && <CustomerActivity compact shopName={undefined} />}
             {admin && <SalesAnalytics
               from={isRangeView?rangeFrom:viewDate}
               to={isRangeView?rangeTo:viewDate}
