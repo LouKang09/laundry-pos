@@ -76,7 +76,7 @@ export async function printReport(api, filters, businessName) {
   <div class="card"><span>Expenses</span><strong>${esc(peso(data.expenses))}</strong></div>
   <div class="card"><span>Estimated profit</span><strong>${esc(peso(data.estimatedProfit))}</strong></div>
 </div>
-<h2>Payments</h2><table><thead><tr><th>Method</th><th>Amount</th></tr></thead><tbody>${rows(data.paymentMethods, [(p) => p.method, (p) => peso(p.amount)])}</tbody></table>
+<h2>Payments</h2><table><thead><tr><th>Method</th><th>Number of payments</th><th>Amount</th></tr></thead><tbody>${rows(data.paymentMethods, [(p) => p.method === "OTHER_BANKS" ? "Other banks" : p.method, (p) => p.count, (p) => peso(p.amount)])}</tbody></table>
 <h2>Services sold</h2><table><thead><tr><th>Service</th><th>Unit</th><th>Actual</th><th>Billable</th><th>Sales</th></tr></thead><tbody>${rows(data.services, [(s) => s.name, (s) => s.unit, (s) => s.actual, (s) => s.billable, (s) => peso(s.sales)])}</tbody></table>
 <h2>Staff performance</h2><table><thead><tr><th>Staff</th><th>Orders created</th><th>Sales</th></tr></thead><tbody>${rows(data.staff, [(s) => s.name, (s) => s.orders, (s) => peso(s.sales)])}</tbody></table>
 <footer>Generated ${esc(new Date().toLocaleString("en-PH"))}. Sales exclude cancelled orders. Estimated profit = sales − recorded expenses.</footer>
