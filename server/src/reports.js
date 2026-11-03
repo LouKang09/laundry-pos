@@ -282,3 +282,63 @@ reporting.get("/dashboard", async (req, res) => {
   });
 });
 
+
+
+/**
+ * Customer activity ledger. Each category uses the date the action actually
+ * occurred, rather than the date the order was first received.
+ * Unclaimed/unpaid are current snapshots of orders received in the period.
+ */
+reporting.get("/reports/customer-activity", admin, async (req, res) => {
+  const cfg = await business();
+  const period = z.enum(["Daily", "Weekly", "Monthly", "Yearly", "Custom"])
+    .parse(req.query.period || "Daily");
+  let from, to;
+  if (period === "Custom") {
+    ({ from, to } = customRange(
+      z.iso.date().parse(req.query.from),
+      z.iso.date().parse(req.query.to),
+      cfg.timezone,
+    ));
+  } else {
+    const day = z.iso.date().parse(req.query.date || DateTime.now().setZone(cfg.timezone).toISODate());
+    ({ from, to } = periodRange(period, day, cfg.timezone));
+  }
+  const range = { gte: from.toJSDate(), lt: to.toJSDate() };
+  const base = { deletedAt: null, status: { not: "CANCELLED" } };
+  const [received, paid, claimed, unclaimed, unpaid] = await Promise.all([
+    db.order.findMany({ where: { ...base, createdAt: range }, select: {
+      id: true, orderNumber: true, customerName: true, total: true, status: true,
+      paymentStatus: true, createdAt: true, claimedAt: true,
+    }, orderBy: { createdAt: "desc" } }),
+    db.payment.findMany({ where: { createdAt: range, order: base }, select: {
+      id: true, amount: true, createdAt: true, order: { select: {
+        orderNumber: true, customerName: true, status: true, paymentStatus: true,
+      } },
+    }, orderBy: { createdAt: "desc" } }),
+    db.order.findMany({ where: { claimedAt: range, deletedAt: null, status: "CLAIMED" },
+      select: { id: true, orderNumber: true, customerName: true, total: true,
+        status: true, paymentStatus: true, claimedAt: true },
+      orderBy: { claimedAt: "desc" } }),
+    db.order.findMany({ where: { ...base, createdAt: range, status: { notIn: ["CLAIMED", "CANCELLED"] } },
+      select: { id: true, orderNumber: true, customerName: true, total: true,
+        status: true, paymentStatus: true, createdAt: true },
+      orderBy: { createdAt: "desc" } }),
+    db.order.findMany({ where: { ...base, createdAt: range, paymentStatus: "UNPAID" },
+      select: { id: true, orderNumber: true, customerName: true, total: true,
+        status: true, paymentStatus: true, createdAt: true },
+      orderBy: { createdAt: "desc" } }),
+  ]);
+  const rows = [
+    ...received.map(o => ({ ...o, category: "ORDERED", occurredAt: o.createdAt, amount: o.total })),
+    ...paid.map(p => ({ id: p.id, ...p.order, category: "PAID", occurredAt: p.createdAt, amount: p.amount })),
+    ...claimed.map(o => ({ ...o, category: "CLAIMED", occurredAt: o.claimedAt, amount: o.total })),
+    ...unclaimed.map(o => ({ ...o, category: "UNCLAIMED", occurredAt: o.createdAt, amount: o.total })),
+    ...unpaid.map(o => ({ ...o, category: "UNPAID", occurredAt: o.createdAt, amount: o.total })),
+  ];
+  const counts = { orders: received.length, paid: paid.length, claimed: claimed.length,
+    unclaimed: unclaimed.length, unpaid: unpaid.length,
+    paymentsAmount: sum(paid, "amount").toFixed(2) };
+  res.json({ from: from.toISO(), to: to.toISO(), timezone: cfg.timezone, counts,
+    rows: rows.sort((a,b) => new Date(b.occurredAt) - new Date(a.occurredAt)) });
+});
