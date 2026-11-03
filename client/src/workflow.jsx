@@ -30,7 +30,8 @@ import {
   NewOrder as BaseNewOrder,
   OrderDetail,
 } from "./operations";
-import { printReport } from "./report-print";
+import { printReport, reportQuery } from "./report-print";
+import { downloadBusinessReport } from "./pdf-export";
 import { SalesAnalytics } from "./sales-analytics";
 import { CustomerActivity, ActivityFilters, businessToday } from "./customer-activity";
 
@@ -197,6 +198,15 @@ function ReportPrintControls() {
       >
         {busy ? "Preparing…" : "Print report"}
       </button>
+      <button className="secondary" type="button" disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const data = await api(reportQuery({period,date:day,from,to}));
+            downloadBusinessReport(data,settings.name);
+          } catch (error) { notify(error.message); }
+          finally { setBusy(false); }
+        }}>Download PDF</button>
     </div>
   );
 }
