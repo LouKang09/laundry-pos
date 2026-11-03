@@ -126,8 +126,8 @@ export function Reports() {
                 <h2 className="large-number">{cash(d.paymentsReceived)}</h2>
                 {d.paymentMethods.map((p) => (
                   <div className="payment-row" key={p.method}>
-                    <span>{label(p.method)}</span>
-                    <strong>{cash(p.amount)}</strong>
+                    <span>{p.method === "OTHER_BANKS" ? "Other banks" : label(p.method)}</span>
+                    <strong>{p.count} payment{p.count === 1 ? "" : "s"} · {cash(p.amount)}</strong>
                   </div>
                 ))}
               </section>
