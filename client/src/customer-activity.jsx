@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { api } from "./api";
+import { downloadCustomerActivity } from "./pdf-export";
 import { useData, ErrorBox, Loading, Empty, Table, cash, date } from "./ui";
 
 export const businessToday = () => new Date().toLocaleDateString("en-CA", {timeZone: window.businessZone || "Asia/Manila"});
@@ -61,6 +62,7 @@ export function CustomerActivity({compact=false, shopName="Laundry POS"}) {
           {["ALL","ORDERED","PAID","CLAIMED","UNCLAIMED","UNPAID"].map(s=><option value={s} key={s}>{s==="ALL"?"All activity":s}</option>)}
         </select>
         <button className="secondary" type="button" onClick={print}>Print customer activity</button>
+        <button className="secondary" type="button" onClick={()=>downloadCustomerActivity(data,shopName,category)}>Download PDF</button>
       </div>
       {rows.length?<><Table headers={["Customer","Order #","Activity","Status","Payment","Date","Amount"]}>{visible.map((r,i)=><tr key={r.category+"-"+r.id+"-"+i}><td>{r.customerName}</td><td>{r.orderNumber}</td><td>{r.category}</td><td>{r.status}</td><td>{r.paymentStatus}</td><td>{date(r.occurredAt)}</td><td>{cash(r.amount)}</td></tr>)}</Table><div className="filters"><span>{rows.length} matching records · Page {page} of {Math.ceil(rows.length/10)}</span><button className="secondary" disabled={page===1} onClick={()=>setPage(v=>v-1)}>Previous</button><button className="secondary" disabled={page*10>=rows.length} onClick={()=>setPage(v=>v+1)}>Next</button></div></>:<Empty>No activity matches the selected filters.</Empty>}</>}
     </>}
