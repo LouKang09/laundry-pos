@@ -32,15 +32,6 @@ export function CustomerActivity({compact=false, shopName="Laundry POS"}) {
   const rows=(data?.rows||[]).filter(r=>category==="ALL"||r.category===category);
   const visible=rows.slice((page-1)*10,page*10);
   const count=data?.counts;
-  const print=()=>{
-    const win=window.open("","_blank");
-    if(!win){alert("Allow pop-ups to print this report.");return;}
-    const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-    const title=esc(shopName)+" — Customer activity";
-    const body=rows.map(r=>"<tr>"+[r.customerName,r.orderNumber,r.category,r.status,r.paymentStatus,new Date(r.occurredAt).toLocaleString("en-PH",{timeZone:data.timezone}),"₱"+Number(r.amount||0).toFixed(2)].map(v=>"<td>"+esc(v)+"</td>").join("")+"</tr>").join("");
-    win.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font:13px Arial;padding:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#eee}h1{font-size:19px}@media print{button{display:none}}</style></head><body><h1>'+title+'</h1><p>'+esc(period)+' · '+esc(new Date(data.from).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' – '+esc(new Date(new Date(data.to).getTime()-1).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' · '+esc(category)+'</p><p>Orders '+count.orders+' · Paid '+count.paid+' · Claimed '+count.claimed+' · Unclaimed '+count.unclaimed+' · Unpaid '+count.unpaid+'</p><h2>Payment method breakdown</h2><table><thead><tr><th>Payment method</th><th>Payments (qty)</th><th>Amount collected</th></tr></thead><tbody>'+(data.paymentMethods||[]).map(p=>'<tr><td>'+esc(p.method)+'</td><td>'+esc(p.count)+'</td><td>₱'+Number(p.amount||0).toFixed(2)+'</td></tr>').join('')+'</tbody></table><h2>Customer activity</h2><table><thead><tr>'+["Customer","Order #","Activity","Laundry status","Payment","Activity date","Amount"].map(v=>"<th>"+v+"</th>").join("")+'</tr></thead><tbody>'+body+'</tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>');
-    win.document.close();
-  };
   return <section className="panel" style={{marginTop:16}}>
     <div className="section-title"><div><h2>Customer activity</h2><p className="muted">Order, payment and claim dates are tracked separately. Unclaimed and unpaid reflect current statuses for orders received in the selected period.</p></div></div>
     <ActivityFilters {...{period,setPeriod,day,setDay,from,setFrom,to,setTo}}/>
@@ -61,8 +52,7 @@ export function CustomerActivity({compact=false, shopName="Laundry POS"}) {
         <select aria-label="Customer activity type" value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}>
           {["ALL","ORDERED","PAID","CLAIMED","UNCLAIMED","UNPAID"].map(s=><option value={s} key={s}>{s==="ALL"?"All activity":s}</option>)}
         </select>
-        <button className="secondary" type="button" onClick={print}>Print customer activity</button>
-        <button className="secondary" type="button" onClick={()=>downloadCustomerActivity(data,shopName,category)}>Download PDF</button>
+        <button className="secondary" type="button" onClick={()=>downloadCustomerActivity(data,shopName,category)}>Download Report</button>
       </div>
       {rows.length?<><Table headers={["Customer","Order #","Activity","Status","Payment","Date","Amount"]}>{visible.map((r,i)=><tr key={r.category+"-"+r.id+"-"+i}><td>{r.customerName}</td><td>{r.orderNumber}</td><td>{r.category}</td><td>{r.status}</td><td>{r.paymentStatus}</td><td>{date(r.occurredAt)}</td><td>{cash(r.amount)}</td></tr>)}</Table><div className="filters"><span>{rows.length} matching records · Page {page} of {Math.ceil(rows.length/10)}</span><button className="secondary" disabled={page===1} onClick={()=>setPage(v=>v-1)}>Previous</button><button className="secondary" disabled={page*10>=rows.length} onClick={()=>setPage(v=>v+1)}>Next</button></div></>:<Empty>No activity matches the selected filters.</Empty>}</>}
     </>}
