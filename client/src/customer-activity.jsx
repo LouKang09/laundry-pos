@@ -37,7 +37,7 @@ export function CustomerActivity({compact=false, shopName="Laundry POS"}) {
     const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
     const title=esc(shopName)+" — Customer activity";
     const body=rows.map(r=>"<tr>"+[r.customerName,r.orderNumber,r.category,r.status,r.paymentStatus,new Date(r.occurredAt).toLocaleString("en-PH",{timeZone:data.timezone}),"₱"+Number(r.amount||0).toFixed(2)].map(v=>"<td>"+esc(v)+"</td>").join("")+"</tr>").join("");
-    win.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font:13px Arial;padding:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#eee}h1{font-size:19px}@media print{button{display:none}}</style></head><body><h1>'+title+'</h1><p>'+esc(period)+' · '+esc(new Date(data.from).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' – '+esc(new Date(new Date(data.to).getTime()-1).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' · '+esc(category)+'</p><p>Orders '+count.orders+' · Paid '+count.paid+' · Claimed '+count.claimed+' · Unclaimed '+count.unclaimed+' · Unpaid '+count.unpaid+'</p><table><thead><tr>'+["Customer","Order #","Activity","Laundry status","Payment","Activity date","Amount"].map(v=>"<th>"+v+"</th>").join("")+'</tr></thead><tbody>'+body+'</tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>');
+    win.document.write('<!doctype html><html><head><title>'+title+'</title><style>body{font:13px Arial;padding:24px;color:#111}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:7px;text-align:left}th{background:#eee}h1{font-size:19px}@media print{button{display:none}}</style></head><body><h1>'+title+'</h1><p>'+esc(period)+' · '+esc(new Date(data.from).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' – '+esc(new Date(new Date(data.to).getTime()-1).toLocaleDateString("en-PH",{timeZone:data.timezone}))+' · '+esc(category)+'</p><p>Orders '+count.orders+' · Paid '+count.paid+' · Claimed '+count.claimed+' · Unclaimed '+count.unclaimed+' · Unpaid '+count.unpaid+'</p><h2>Payment method breakdown</h2><table><thead><tr><th>Payment method</th><th>Payments (qty)</th><th>Amount collected</th></tr></thead><tbody>'+(data.paymentMethods||[]).map(p=>'<tr><td>'+esc(p.method)+'</td><td>'+esc(p.count)+'</td><td>₱'+Number(p.amount||0).toFixed(2)+'</td></tr>').join('')+'</tbody></table><h2>Customer activity</h2><table><thead><tr>'+["Customer","Order #","Activity","Laundry status","Payment","Activity date","Amount"].map(v=>"<th>"+v+"</th>").join("")+'</tr></thead><tbody>'+body+'</tbody></table><script>window.onload=()=>{window.print()}<\/script></body></html>');
     win.document.close();
   };
   return <section className="panel" style={{marginTop:16}}>
@@ -47,6 +47,14 @@ export function CustomerActivity({compact=false, shopName="Laundry POS"}) {
     {loading&&!data?<Loading/>:data&&<>
       <div className="report-stats">
         {[["Orders",count.orders],["Paid",count.paid],["Claimed",count.claimed],["Unclaimed",count.unclaimed],["Unpaid",count.unpaid],["Payments received",cash(count.paymentsAmount)]].map(([k,v])=><div className="stat" key={k}><span>{k}</span><h2>{v}</h2></div>)}
+      </div>
+      <div style={{marginTop:16}}>
+        <h3>Payment method breakdown</h3>
+        <p className="muted small">Number of completed payments and amount received in the selected period. Bank transfers are counted under their recorded provider.</p>
+        <Table headers={["Payment method","Payments (qty)","Amount collected"]}>
+          {(data.paymentMethods || []).map(p=><tr key={p.method}><td>{p.method==="OTHER_BANKS"?"Other banks":p.method==="GOTYME"?"GoTyme":p.method==="MARIBANK"?"MariBank":p.method==="GCASH"?"GCash":p.method==="MAYA"?"Maya":p.method==="CASH"?"Cash":p.method}</td><td>{p.count}</td><td>{cash(p.amount)}</td></tr>)}
+          <tr><td><strong>Total</strong></td><td><strong>{count.paid}</strong></td><td><strong>{cash(count.paymentsAmount)}</strong></td></tr>
+        </Table>
       </div>
       {!compact&&<><div className="filters" style={{marginTop:16}}>
         <select aria-label="Customer activity type" value={category} onChange={e=>{setCategory(e.target.value);setPage(1)}}>
