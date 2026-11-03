@@ -15,6 +15,7 @@ import {
   useData,
 } from "./ui";
 import { printReport, reportQuery } from "./report-print";
+import { CustomerActivity } from "./customer-activity";
 
 const localDay = () =>
   new Date().toLocaleDateString("en-CA", {
@@ -131,6 +132,7 @@ export function Reports() {
                 ))}
               </section>
             </div>
+            <CustomerActivity shopName={settings.name} />
             <section className="panel">
               <h2>Services sold</h2>
               <Table
