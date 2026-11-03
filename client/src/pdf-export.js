@@ -1,84 +1,150 @@
-// Dependency-free, client-side multi-page PDF export. No report data leaves the browser.
-const pageW = 595.28, pageH = 841.89;
-const txt = value => String(value ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?");
-const pdfEscape = value => txt(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-const money = amount => "PHP " + Number(amount || 0).toLocaleString("en-PH", {minimumFractionDigits:2,maximumFractionDigits:2});
-const dateText = (v, zone) => new Date(v).toLocaleString("en-PH", {timeZone:zone||"Asia/Manila",year:"numeric",month:"short",day:"numeric"});
-const wrap = (text, max) => {
-  const words = txt(text).split(/\s+/).filter(Boolean), lines=[]; let line="";
-  for (let word of words) {
-    while (word.length > max) { if(line){lines.push(line);line="";} lines.push(word.slice(0,max)); word=word.slice(max); }
-    if ((line+" "+word).trim().length > max && line) { lines.push(line); line=word; }
-    else line=(line+" "+word).trim();
+// Browser-native vector PDF: sharp text and lines at any zoom level.
+// Uses A4 landscape for readable reports and keeps private data in the browser.
+const WIDTH = 841.89;
+const HEIGHT = 595.28;
+const LEFT = 42;
+const RIGHT = 42;
+const BOTTOM = 52;
+const TABLE_WIDTH = WIDTH - LEFT - RIGHT;
+const normalize = v => String(v ?? "").normalize("NFKD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^\x20-\x7e]/g, "-");
+const escapeText = v => normalize(v).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+const money = amount => "PHP " + Number(amount || 0).toLocaleString("en-PH", {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+const dateText = (v, zone) => new Date(v).toLocaleDateString("en-PH", {
+  timeZone: zone || "Asia/Manila", year: "numeric", month: "short", day: "numeric",
+});
+const shortDate = (v, zone) => new Date(v).toLocaleDateString("en-PH", {
+  timeZone: zone || "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit",
+});
+const approximateWidth = (s,size) => normalize(s).split("").reduce((sum,ch)=>
+  sum + (ch===" " ? 0.27 : "il.,:;!|".includes(ch) ? 0.25 :
+    "MW@#%".includes(ch) ? 0.85 : "0123456789".includes(ch) ? 0.55 : 0.53)*size,0);
+function wrapText(value, maxWidth, size=10.5) {
+  const words = normalize(value).split(/\s+/).filter(Boolean);
+  const out=[]; let line="";
+  for (const word of words) {
+    const candidate = line ? line+" "+word : word;
+    if (approximateWidth(candidate,size) <= maxWidth) { line=candidate; continue; }
+    if(line){ out.push(line); line=""; }
+    let rest=word;
+    while(rest && approximateWidth(rest,size)>maxWidth){
+      let cut=1;
+      while(cut<rest.length && approximateWidth(rest.slice(0,cut+1),size)<=maxWidth)cut++;
+      out.push(rest.slice(0,cut));
+      rest=rest.slice(cut);
+    }
+    line=rest;
   }
-  if(line)lines.push(line); return lines.length ? lines : [""];
-};
+  if(line)out.push(line);
+  return out.length ? out : [""];
+}
 export function downloadPdf({title, subtitle, filename, sections=[]}) {
-  const pages=[]; let commands=[], y=0;
-  const draw=(x,at,value,size=10,bold=false)=> {
-    commands.push("BT /"+(bold?"F2":"F1")+" "+size+" Tf 1 0 0 1 "+x.toFixed(2)+" "+(pageH-at).toFixed(2)+" Tm ("+pdfEscape(value)+") Tj ET");
+  const pages=[];
+  let commands=[], y=0, currentPage=0;
+  const number = n => Number(n).toFixed(2);
+  const fillRect = (x,top,width,height,rgb) => {
+    commands.push(rgb.join(" ")+" rg "+number(x)+" "+number(HEIGHT-top-height)+" "+number(width)+" "+number(height)+" re f");
   };
-  const line=(at)=>commands.push("0.8 0.84 0.88 RG 0.6 w 36 "+(pageH-at).toFixed(2)+" m "+(pageW-36)+" "+(pageH-at).toFixed(2)+" l S");
-  const newPage=()=> {
+  const draw = (x,top,value,size=10.5,bold=false,color=[0.12,0.17,0.24]) => {
+    commands.push(color.join(" ")+" rg BT /"+(bold?"F2":"F1")+" "+number(size)+" Tf 1 0 0 1 "+
+      number(x)+" "+number(HEIGHT-top)+" Tm ("+escapeText(value)+") Tj ET");
+  };
+  const rule = (top) => commands.push("0.84 0.87 0.91 RG 0.45 w "+number(LEFT)+" "+number(HEIGHT-top)+" m "+number(WIDTH-RIGHT)+" "+number(HEIGHT-top)+" l S");
+  const newPage = () => {
     if(commands.length) pages.push(commands.join("\n"));
-    commands=[];y=48;
-    draw(36,y,title,17,true); y+=19;
-    if(subtitle)for(const t of wrap(subtitle,100)){draw(36,y,t,9);y+=12;}
-    y+=10;line(y);y+=20;
+    commands=[]; currentPage++; y=0;
+    fillRect(0,0,WIDTH,9,[0.08,0.35,0.42]);
+    draw(LEFT,45,title,19,true,[0.08,0.20,0.27]);
+    y=63;
+    for(const sub of wrapText(subtitle, TABLE_WIDTH,10.5)){
+      draw(LEFT,y,sub,10.5,false,[0.34,0.42,0.49]); y+=14;
+    }
+    y+=9;rule(y);y+=20;
   };
-  const need=(height)=>{if(y+height>pageH-65)newPage();};
+  const requireSpace = height => { if(y+height>HEIGHT-BOTTOM)newPage(); };
+  function table(section){
+    const headers=section.headers.map(String), rows=section.rows;
+    const ratios=section.widths?.length===headers.length?section.widths:Array(headers.length).fill(1/headers.length);
+    const ratioSum=ratios.reduce((a,b)=>a+b,0);
+    const widths=ratios.map(r=>TABLE_WIDTH*r/ratioSum);
+    const starts=widths.map((_,i)=>LEFT+widths.slice(0,i).reduce((a,b)=>a+b,0));
+    let rowIndex=0;
+    const render=(values,header=false)=>{
+      const size=header?10.5:10.5, padding=9;
+      const multi=widths.map((w,i)=>wrapText(values[i] ?? "",Math.max(w-padding*2,18),size));
+      const rowHeight=Math.max(29,...multi.map(lines=>lines.length*14+15));
+      // Keep the whole row together and repeat headings after page breaks.
+      if(y+rowHeight>HEIGHT-BOTTOM){
+        newPage();
+        if(!header)render(headers,true);
+      }
+      if(header)fillRect(LEFT,y,TABLE_WIDTH,rowHeight,[0.88,0.93,0.95]);
+      else if(rowIndex++%2===0)fillRect(LEFT,y,TABLE_WIDTH,rowHeight,[0.965,0.976,0.982]);
+      for(let i=0;i<multi.length;i++){
+        multi[i].forEach((line,k)=>draw(starts[i]+padding,y+19+k*14,line,size,header,[0.12,0.22,0.30]));
+      }
+      y+=rowHeight;rule(y);
+    };
+    render(headers,true);
+    if(rows.length)for(const row of rows)render(row);
+    else render(["No records for this period.",...headers.slice(1).map(()=> "")]);
+    y+=17;
+  }
   newPage();
   for(const section of sections){
-    if(section.heading){need(35);draw(36,y,section.heading,13,true);y+=23;}
-    if(section.note){for(const t of wrap(section.note,104)){need(14);draw(36,y,t,9);y+=13;}y+=7;}
+    if(section.heading){requireSpace(44);draw(LEFT,y,section.heading,13.5,true,[0.07,0.32,0.39]);y+=26;}
+    if(section.note)for(const noteLine of wrapText(section.note,TABLE_WIDTH,10.5)){
+      requireSpace(18);draw(LEFT,y,noteLine,10.5,false,[0.34,0.42,0.49]);y+=15;
+    }
+    if(section.note)y+=10;
     if(section.items){
-      for(const [label,value] of section.items){need(17);draw(40,y,label,10);draw(305,y,value,10,true);y+=16;}
-      y+=12;
+      for(const [name,value] of section.items){
+        requireSpace(21);
+        draw(LEFT+8,y,String(name),11);
+        draw(LEFT+290,y,String(value),11,true);
+        y+=21;
+      }
+      y+=15;
     }
-    if(section.headers&&section.rows){
-      const count=section.headers.length;
-      const usable=pageW-72;
-      const widths=section.widths&&section.widths.length===count?section.widths.map(v=>v*usable):Array(count).fill(usable/count);
-      const startXs=widths.map((_,i)=>36+widths.slice(0,i).reduce((a,b)=>a+b,0));
-      const renderRow=(cells,header=false)=>{
-        const wrapped=cells.map((cell,i)=>wrap(cell,Math.max(6,Math.floor((widths[i]-10)/(header?5.9:5.3)))));
-        const height=Math.max(21,...wrapped.map(a=>a.length*12+7));
-        need(height+3);
-        if(header){commands.push("0.92 0.94 0.96 rg 36 "+(pageH-y-height+5).toFixed(2)+" "+usable+" "+height+" re f");}
-        wrapped.forEach((ls,i)=>ls.forEach((text,k)=>draw(startXs[i]+4,y+13+k*12,text,header?9:9,header)));
-        y+=height;line(y);
-      };
-      renderRow(section.headers,true);
-      if(!section.rows.length){renderRow(["No records for the selected period.",...Array(count-1).fill("")]);}
-      section.rows.forEach(r=>{if(y>pageH-98){newPage();renderRow(section.headers,true);}renderRow(r);});
-      y+=16;
-    }
+    if(section.headers && section.rows)table(section);
   }
   if(commands.length)pages.push(commands.join("\n"));
   const objects=[null];
-  const add=s=>{objects.push(s);return objects.length-1;};
-  const catalog=add(""), tree=add("");
-  const f1=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-  const f2=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>");
+  const add=obj=>{objects.push(obj);return objects.length-1;};
+  const catalog=add(""),pagesRoot=add("");
+  const font=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const boldFont=add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
   const kids=[];
   for(let i=0;i<pages.length;i++){
-    const foot="BT /F1 9 Tf 1 0 0 1 36 32 Tm (Generated "+pdfEscape(new Date().toLocaleString("en-PH"))+"  |  Page "+(i+1)+" of "+pages.length+") Tj ET";
-    const stream=pages[i]+"\n"+foot;
-    const len=new TextEncoder().encode(stream).length;
-    const content=add("<< /Length "+len+" >>\nstream\n"+stream+"\nendstream");
-    kids.push(add("<< /Type /Page /Parent "+tree+" 0 R /MediaBox [0 0 "+pageW+" "+pageH+"] /Resources << /Font << /F1 "+f1+" 0 R /F2 "+f2+" 0 R >> >> /Contents "+content+" 0 R >>"));
+    const footer="0.36 0.43 0.50 rg BT /F1 9 Tf 1 0 0 1 "+LEFT+" 27 Tm ("+
+      escapeText("Generated "+new Date().toLocaleString("en-PH")+" | Page "+(i+1)+" of "+pages.length)+") Tj ET";
+    const stream=pages[i]+"\n"+footer;
+    const content=add("<< /Length "+new TextEncoder().encode(stream).length+" >>\nstream\n"+stream+"\nendstream");
+    kids.push(add("<< /Type /Page /Parent "+pagesRoot+" 0 R /MediaBox [0 0 "+WIDTH+" "+HEIGHT+"] "+
+      "/Resources << /Font << /F1 "+font+" 0 R /F2 "+boldFont+" 0 R >> >> /Contents "+content+" 0 R >>"));
   }
-  objects[tree]="<< /Type /Pages /Kids ["+kids.map(i=>i+" 0 R").join(" ")+"] /Count "+kids.length+" >>";
-  objects[catalog]="<< /Type /Catalog /Pages "+tree+" 0 R >>";
-  let pdf="%PDF-1.4\n", offsets=[0];const encoder=new TextEncoder();
-  for(let i=1;i<objects.length;i++){offsets[i]=encoder.encode(pdf).length;pdf+=i+" 0 obj\n"+objects[i]+"\nendobj\n";}
+  objects[pagesRoot]="<< /Type /Pages /Kids ["+kids.map(i=>i+" 0 R").join(" ")+"] /Count "+kids.length+" >>";
+  objects[catalog]="<< /Type /Catalog /Pages "+pagesRoot+" 0 R >>";
+  const encoder=new TextEncoder();
+  let pdf="%PDF-1.4\n",offsets=[0];
+  for(let i=1;i<objects.length;i++){
+    offsets[i]=encoder.encode(pdf).length;
+    pdf+=i+" 0 obj\n"+objects[i]+"\nendobj\n";
+  }
   const xref=encoder.encode(pdf).length;
   pdf+="xref\n0 "+objects.length+"\n0000000000 65535 f \n";
   for(let i=1;i<objects.length;i++)pdf+=String(offsets[i]).padStart(10,"0")+" 00000 n \n";
   pdf+="trailer\n<< /Size "+objects.length+" /Root "+catalog+" 0 R >>\nstartxref\n"+xref+"\n%%EOF";
   const blob=new Blob([encoder.encode(pdf)],{type:"application/pdf"});
-  const url=URL.createObjectURL(blob),link=document.createElement("a");
-  link.href=url;link.download=filename.replace(/[^a-zA-Z0-9._-]/g,"_");document.body.appendChild(link);link.click();link.remove();
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=filename.replace(/[^a-zA-Z0-9._-]/g,"_");
+  document.body.appendChild(link);
+  link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 export function downloadBusinessReport(data,name){
@@ -111,8 +177,8 @@ export function downloadCustomerActivity(data,name,category="ALL"){
       {heading:"Payment method breakdown",headers:["Method","Quantity","Collected"],widths:[0.45,0.20,0.35],
         rows:(data.paymentMethods||[]).map(x=>[x.method,x.count,money(x.amount)])},
       {heading:"Customer activity",headers:["Customer / order","Activity","Status","Date","Amount"],
-        widths:[0.29,0.17,0.16,0.20,0.18],
-        rows:rows.map(x=>[x.customerName+" / "+x.orderNumber,x.category,x.status+" / "+x.paymentStatus,dateText(x.occurredAt,data.timezone),money(x.amount)])},
+        widths:[0.29,0.14,0.22,0.17,0.18],
+        rows:rows.map(x=>[x.customerName+" / "+x.orderNumber,x.category,x.status+" / "+x.paymentStatus,shortDate(x.occurredAt,data.timezone),money(x.amount)])},
       {note:"Paid and claimed events use their event dates. Unpaid and unclaimed are current statuses of orders received during this period. Customer records may appear in more than one activity category."}
     ]});
 }
