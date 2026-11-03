@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Printer } from "lucide-react";
+import { Download } from "lucide-react";
 import { api } from "./api";
 import { useApp } from "./context";
 import { SalesChart } from "./operations";
@@ -14,7 +14,7 @@ import {
   label,
   useData,
 } from "./ui";
-import { printReport, reportQuery } from "./report-print";
+import { reportQuery } from "./report-print";
 import { CustomerActivity } from "./customer-activity";
 import { downloadBusinessReport } from "./pdf-export";
 
@@ -28,7 +28,6 @@ export function Reports() {
     [day, setDay] = useState(localDay()),
     [from, setFrom] = useState(localDay()),
     [to, setTo] = useState(localDay()),
-    [printing, setPrinting] = useState(false),
     [downloading, setDownloading] = useState(false);
   const { settings, notify } = useApp();
   const filters = { period, date: day, from, to };
@@ -71,25 +70,19 @@ export function Reports() {
             onChange={(e) => e.target.value && setDay(e.target.value)}
           />
         )}
-        <button
-          className="secondary"
-          disabled={printing}
-          onClick={async () => {
-            setPrinting(true);
-            try {
-              await printReport(api, filters, settings.name);
-            } catch (e) {
-              notify(e.message);
-            } finally {
-              setPrinting(false);
-            }
-          }}
-        >
-          <Printer size={18} /> {printing ? "Preparing…" : "Print report"}
-        </button>
         <button className="secondary" type="button" disabled={downloading}
-          onClick={async () => {setDownloading(true);try {const report=await api(path);downloadBusinessReport(report,settings.name);}catch(e){notify(e.message);}finally{setDownloading(false);}}}>
-          {downloading ? "Preparing PDF…" : "Download PDF"}
+          onClick={async () => {
+            setDownloading(true);
+            try {
+              const report = await api(path);
+              downloadBusinessReport(report, settings.name);
+            } catch (error) {
+              notify(error.message);
+            } finally {
+              setDownloading(false);
+            }
+          }}>
+          <Download size={18} /> {downloading ? "Preparing report…" : "Download Report"}
         </button>
       </PageHead>
       <ErrorBox message={error} />
