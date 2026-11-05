@@ -42,8 +42,14 @@
 @media(max-width:1200px){.cashflow-forms{grid-template-columns:1fr}.cashflow-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.cashflow-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cashflow-summary{grid-template-columns:1fr 1fr;gap:8px}.cashflow-summary>div{padding:12px}.cashflow-summary strong{font-size:1rem}.cashflow-date-range{width:100%}.cashflow-date-range label{flex:1;min-width:125px;display:grid}.cashflow-date-range input{width:100%}}
 @media print{
-  @page {size:A3 landscape;margin:10mm}
+  @page cashflow-ledger {size:A3 landscape;margin:10mm}
+  /* Shared receipt-print rules hide every element outside a receipt. Re-enable
+     the ledger subtree only while Cash Flow is being printed. */
+  body.cashflow-printing .cashflow-page,
+  body.cashflow-printing .cashflow-page *{visibility:visible!important}
+  body.cashflow-printing .cashflow-page{page:cashflow-ledger}
   body.cashflow-printing{background:white!important}
+  body.cashflow-printing .cashflow-page .pagehead{display:none!important}
   body.cashflow-printing .app>aside,body.cashflow-printing .topbar,body.cashflow-printing .toast,
   body.cashflow-printing .cashflow-no-print,body.cashflow-printing .cashflow-forms,
   body.cashflow-printing .cashflow-summary,body.cashflow-printing .cashflow-intro,
@@ -52,7 +58,7 @@
   body.cashflow-printing .workspace{width:100%;margin:0!important}
   body.cashflow-printing main{padding:0;max-width:none}
   body.cashflow-printing .pagehead{margin-bottom:12px}
-  body.cashflow-printing .cashflow-ledger-panel{border:none;box-shadow:none;padding:0;margin:0}
+  body.cashflow-printing .cashflow-ledger-panel{border:none;box-shadow:none;padding:0;margin:0;overflow:visible!important}
   body.cashflow-printing .cashflow-ledger-head>div:not(.cashflow-print-title){display:none}
   body.cashflow-printing .cashflow-print-title{display:flex;flex-direction:column;gap:4px;font-size:14px}
   body.cashflow-printing .cashflow-print-title span{font-size:10px}
