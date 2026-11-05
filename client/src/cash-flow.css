@@ -65,16 +65,46 @@
   body.cashflow-printing .pagehead{margin-bottom:12px}
   body.cashflow-printing .cashflow-ledger-panel{border:none;box-shadow:none;padding:0;margin:0;overflow:visible!important}
   body.cashflow-printing .cashflow-ledger-head>div:not(.cashflow-print-title){display:none}
-  body.cashflow-printing .cashflow-print-title{display:flex;flex-direction:column;gap:4px;font-size:14px}
-  body.cashflow-printing .cashflow-print-title span{font-size:10px}
+  body.cashflow-printing .cashflow-print-title{display:flex;flex-direction:column;gap:5px;font-size:17pt;line-height:1.2}
+  body.cashflow-printing .cashflow-print-title span{font-size:10.5pt}
   body.cashflow-printing .cashflow-table-scroll{overflow:visible;border:0}
-  body.cashflow-printing .cashflow-table{min-width:0;width:100%;font-size:8px}
-  body.cashflow-printing .cashflow-bank-panel{margin-top:20px;break-before:auto}
-  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head{padding:0 0 8px}
-  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head h2{font-size:13px}
-  body.cashflow-printing .cashflow-bank-table{font-size:9px}
-  body.cashflow-printing .cashflow-bank-table .cashflow-note{min-width:0}
-  body.cashflow-printing .cashflow-table td,body.cashflow-printing .cashflow-table th{padding:5px 3px;white-space:normal;position:static}
+  /* A3 landscape accommodates all cash columns at readable print sizes.
+     Fixed widths prevent content from expanding cells beyond the paper. */
+  body.cashflow-printing .cashflow-table{
+    min-width:0;width:100%;table-layout:fixed;
+    font-size:10.5pt;line-height:1.25;font-variant-numeric:tabular-nums;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact
+  }
+  body.cashflow-printing .cashflow-table td,
+  body.cashflow-printing .cashflow-table th{
+    padding:1.8mm 1mm;vertical-align:middle;position:static;
+    border-bottom:1px solid #bdc9d0
+  }
+  body.cashflow-printing .cashflow-table th{
+    font-size:10pt;font-weight:800;line-height:1.18;
+    white-space:normal;overflow-wrap:normal;
+    color:#173346!important;background:#e6edf1!important;
+    border-top:1px solid #a5b5bf;text-align:right
+  }
+  body.cashflow-printing .cashflow-table td{
+    white-space:nowrap;text-align:right;background:#fff!important
+  }
+  body.cashflow-printing .cashflow-table th:first-child,
+  body.cashflow-printing .cashflow-table td:first-child{text-align:left}
+  body.cashflow-printing .cashflow-income-table th:first-child{width:10%}
+  body.cashflow-printing .cashflow-income-table th:nth-child(6),
+  body.cashflow-printing .cashflow-income-table th:nth-child(9){width:6%}
+  body.cashflow-printing .cashflow-bank-panel{margin-top:9mm;break-before:auto}
+  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head{padding:0 0 3mm}
+  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head h2{font-size:15pt}
+  body.cashflow-printing .cashflow-bank-table{font-size:11.5pt}
+  body.cashflow-printing .cashflow-bank-table th{font-size:11pt}
+  body.cashflow-printing .cashflow-bank-table th:first-child{width:12%}
+  body.cashflow-printing .cashflow-bank-table th:nth-child(6){width:31%}
+  body.cashflow-printing .cashflow-bank-table .cashflow-note{
+    min-width:0;max-width:none;white-space:normal;text-align:left;
+    overflow:visible;overflow-wrap:anywhere
+  }
   body.cashflow-printing .cashflow-table thead{display:table-header-group}
   body.cashflow-printing .cashflow-table tr{break-inside:avoid}
 }
