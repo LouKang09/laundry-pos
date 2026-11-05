@@ -15,11 +15,13 @@ const initialDay = localDay();
 const blank = { pettyCashOverride: "", bankPettyOverride: "", actual: "", creditToBank: "0", debitFromBank: "0", note: "" };
 const numberInput = (value) => value === null || value === undefined ? "" : String(value);
 const showMoney = (value) => value == null ? "—" : cash(value);
-const columns = [
+const cashColumns = [
   "Date", "Petty Cash", "Daily Income", "Cash", "GCash", "GCash Txns",
   "Other Banks", "Cash + GCash", "Total Txns", "Expenses", "Expected Total",
-  "Actual", "Variance", "Bank Petty", "Credit to Bank", "Debit from Bank",
-  "Running Bank Total", "Note"
+  "Actual", "Variance"
+];
+const bankColumns = [
+  "Date", "Bank Petty", "Credit to Bank", "Debit from Bank", "Running Bank Total", "Note"
 ];
 
 export function CashFlow() {
@@ -188,10 +190,10 @@ export function CashFlow() {
         </div>
         {loading ? <Loading /> : (
           <div className="cashflow-table-scroll">
-            <table className="cashflow-table">
-              <thead><tr>{columns.map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
+            <table className="cashflow-table cashflow-income-table" aria-label="Cash Flow Ledger">
+              <thead><tr>{cashColumns.map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
               <tbody>
-                {!data?.rows?.length && <tr><td colSpan={18} className="cashflow-empty">No cash flow records for this range.</td></tr>}
+                {!data?.rows?.length && <tr><td colSpan={cashColumns.length} className="cashflow-empty">No cash flow records for this range.</td></tr>}
                 {data?.rows?.map((row) => (
                   <tr key={row.date} className={row.date === entryDate ? "cashflow-selected" : ""}
                     onClick={() => setEntryDate(row.date)} title={"Edit cash entry for " + row.date}>
@@ -202,6 +204,31 @@ export function CashFlow() {
                     <td>{cash(row.expenses)}</td><td><strong>{cash(row.expectedTotal)}</strong></td>
                     <td>{showMoney(row.actual)}</td>
                     <td className={row.variance == null ? "" : row.variance < 0 ? "cashflow-negative" : row.variance > 0 ? "cashflow-positive" : ""}>{showMoney(row.variance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="muted small cashflow-no-print">
+          Expected Total = Petty Cash + Daily Income − Expenses. Variance = Actual − Expected Total.
+        </p>
+      </section>
+      <section className="panel cashflow-ledger-panel cashflow-bank-panel">
+        <div className="cashflow-ledger-head">
+          <h2>Bank Ledger</h2>
+          <p className="muted small cashflow-no-print">Bank movements for the same selected date range. Click any date to edit its entry.</p>
+        </div>
+        {loading ? <Loading /> : (
+          <div className="cashflow-table-scroll">
+            <table className="cashflow-table cashflow-bank-table" aria-label="Bank Ledger">
+              <thead><tr>{bankColumns.map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
+              <tbody>
+                {!data?.rows?.length && <tr><td colSpan={bankColumns.length} className="cashflow-empty">No bank ledger records for this range.</td></tr>}
+                {data?.rows?.map((row) => (
+                  <tr key={row.date} className={row.date === entryDate ? "cashflow-selected" : ""}
+                    onClick={() => setEntryDate(row.date)} title={"Edit bank entry for " + row.date}>
+                    <td><strong>{row.date}</strong></td>
                     <td><strong>{cash(row.bankPetty)}</strong>{row.bankPettyOverride != null && <small>Override</small>}</td>
                     <td>{cash(row.creditToBank)}</td><td>{cash(row.debitFromBank)}</td>
                     <td><strong>{cash(row.runningBankTotal)}</strong></td>
@@ -213,7 +240,6 @@ export function CashFlow() {
           </div>
         )}
         <p className="muted small cashflow-no-print">
-          Expected Total = Petty Cash + Daily Income − Expenses. Variance = Actual − Expected Total.
           Running Bank Total = Opening Bank Balance + Credits − Debits, including saved overrides.
         </p>
       </section>

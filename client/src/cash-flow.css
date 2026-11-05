@@ -22,7 +22,12 @@
 .cashflow-date-range label{display:flex;align-items:center;gap:7px;font-weight:650;font-size:.74rem}
 .cashflow-date-range input{min-height:38px;padding:6px 9px}
 .cashflow-table-scroll{width:100%;overflow-x:auto;border-top:1px solid var(--border);overscroll-behavior-x:contain}
-.cashflow-table{border-collapse:collapse;width:100%;min-width:1720px;font-size:.71rem;font-variant-numeric:tabular-nums}
+.cashflow-table{border-collapse:collapse;width:100%;min-width:1400px;font-size:.71rem;font-variant-numeric:tabular-nums}
+.cashflow-bank-panel{margin-top:18px}
+.cashflow-bank-panel .cashflow-ledger-head{justify-content:flex-start}
+.cashflow-bank-panel .cashflow-ledger-head h2{margin:0}
+.cashflow-bank-table{min-width:750px}
+.cashflow-bank-table .cashflow-note{text-align:left;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;min-width:180px}
 .cashflow-table th{background:#edf4f5;white-space:nowrap;text-align:right;font-weight:800;color:#294759;border-bottom:1px solid #dce6e9;position:sticky;top:0}
 .cashflow-table td,.cashflow-table th{padding:12px 9px;vertical-align:middle;border-bottom:1px solid #e5ecef}
 .cashflow-table td{text-align:right;white-space:nowrap}
@@ -63,7 +68,12 @@
   body.cashflow-printing .cashflow-print-title{display:flex;flex-direction:column;gap:4px;font-size:14px}
   body.cashflow-printing .cashflow-print-title span{font-size:10px}
   body.cashflow-printing .cashflow-table-scroll{overflow:visible;border:0}
-  body.cashflow-printing .cashflow-table{min-width:0;width:100%;font-size:7px}
+  body.cashflow-printing .cashflow-table{min-width:0;width:100%;font-size:8px}
+  body.cashflow-printing .cashflow-bank-panel{margin-top:20px;break-before:auto}
+  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head{padding:0 0 8px}
+  body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head h2{font-size:13px}
+  body.cashflow-printing .cashflow-bank-table{font-size:9px}
+  body.cashflow-printing .cashflow-bank-table .cashflow-note{min-width:0}
   body.cashflow-printing .cashflow-table td,body.cashflow-printing .cashflow-table th{padding:5px 3px;white-space:normal;position:static}
   body.cashflow-printing .cashflow-table thead{display:table-header-group}
   body.cashflow-printing .cashflow-table tr{break-inside:avoid}
