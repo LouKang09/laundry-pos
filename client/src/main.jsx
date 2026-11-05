@@ -19,6 +19,7 @@ import {
   Printer,
   Boxes,
   Wallet,
+  Landmark,
   ChartNoAxesCombined,
   Tags,
   UserRoundCog,
@@ -40,6 +41,7 @@ import {
 } from "./management";
 import { Services } from "./services-load-pricing";
 import { Reports } from "./reporting-page";
+import { CashFlow } from "./cash-flow";
 import { UserManagement, Logs } from "./admin-pages";
 import { ReceiptCenter } from "./receipt-center";
 import "./styles.css";
@@ -59,6 +61,7 @@ const nav = [
   ["/receipts", "Receipt Center", Printer],
   ["/inventory", "Inventory", Boxes, true],
   ["/expenses", "Expenses", Wallet, true],
+  ["/cash-flow", "Cash Flow", Landmark, true],
   ["/reports", "Reports", ChartNoAxesCombined, true],
   ["/services", "Services", Tags, true],
   ["/users", "Users", UserRoundCog, true],
@@ -369,6 +372,7 @@ function Shell() {
               <Route path="/customers" element={<Customers />} />
               <Route path="/inventory" element={guarded(<Inventory />)} />
               <Route path="/expenses" element={guarded(<Expenses />)} />
+              <Route path="/cash-flow" element={guarded(<CashFlow />)} />
               <Route path="/reports" element={guarded(<Reports />)} />
               <Route path="/services" element={guarded(<Services />)} />
               <Route path="/users" element={guarded(<UserManagement />)} />

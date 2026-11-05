@@ -14,6 +14,7 @@ import { staffReceipts } from "./staff-receipts.js";
 import { servicePricing } from "./service-pricing.js";
 import { management } from "./admin.js";
 import { reporting } from "./reports.js";
+import { cashFlow } from "./cash-flow.js";
 import { salesAnalytics } from "./sales-analytics.js";
 import { z, customerSchema, pageNumber } from "./validation.js";
 export const app = express();
@@ -220,6 +221,7 @@ app.use("/api/orders", historicalOrders);
 app.use("/api/orders", orders);
 app.use("/api/admin", servicePricing);
 app.use("/api/admin", management);
+app.use("/api/admin/cash-flow", cashFlow);
 app.use("/api", reporting);
 app.use("/api", salesAnalytics);
 app.use("/api", (req, res) =>

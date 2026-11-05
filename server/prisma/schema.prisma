@@ -313,3 +313,15 @@ model Setting {
   value     Json
   updatedAt DateTime @updatedAt
 }
+
+
+model CashFlowEntry {
+  date               DateTime  @id @db.Date
+  pettyCashOverride  Decimal?  @db.Decimal(12, 2)
+  bankPettyOverride  Decimal?  @db.Decimal(12, 2)
+  actual             Decimal?  @db.Decimal(12, 2)
+  creditToBank       Decimal   @default(0) @db.Decimal(12, 2)
+  debitFromBank      Decimal   @default(0) @db.Decimal(12, 2)
+  note               String?   @db.VarChar(500)
+  updatedAt          DateTime  @updatedAt
+}
