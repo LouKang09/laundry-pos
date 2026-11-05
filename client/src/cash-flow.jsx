@@ -16,9 +16,10 @@ const blank = { pettyCashOverride: "", bankPettyOverride: "", actual: "", credit
 const numberInput = (value) => value === null || value === undefined ? "" : String(value);
 const showMoney = (value) => value == null ? "—" : cash(value);
 const columns = [
-  "Date", "Petty Cash", "Daily Income", "Expenses", "Expected Total", "Actual",
-  "Variance", "Cash", "GCash", "GCash Txns", "Other Banks", "Cash + GCash",
-  "Total Txns", "Bank Petty", "Credit to Bank", "Debit from Bank", "Running Bank Total", "Note"
+  "Date", "Petty Cash", "Daily Income", "Cash", "GCash", "GCash Txns",
+  "Other Banks", "Cash + GCash", "Total Txns", "Expenses", "Expected Total",
+  "Actual", "Variance", "Bank Petty", "Credit to Bank", "Debit from Bank",
+  "Running Bank Total", "Note"
 ];
 
 export function CashFlow() {
@@ -196,11 +197,11 @@ export function CashFlow() {
                     onClick={() => setEntryDate(row.date)} title={"Edit cash entry for " + row.date}>
                     <td><strong>{row.date}</strong></td>
                     <td>{cash(row.pettyCash)}</td><td>{cash(row.dailyIncome)}</td>
+                    <td>{cash(row.cash)}</td><td>{cash(row.gcash)}</td><td>{row.gcashTxns}</td>
+                    <td>{cash(row.other)}</td><td>{cash(row.cashPlusGcash)}</td><td>{row.transactionCount}</td>
                     <td>{cash(row.expenses)}</td><td><strong>{cash(row.expectedTotal)}</strong></td>
                     <td>{showMoney(row.actual)}</td>
                     <td className={row.variance == null ? "" : row.variance < 0 ? "cashflow-negative" : row.variance > 0 ? "cashflow-positive" : ""}>{showMoney(row.variance)}</td>
-                    <td>{cash(row.cash)}</td><td>{cash(row.gcash)}</td><td>{row.gcashTxns}</td>
-                    <td>{cash(row.other)}</td><td>{cash(row.cashPlusGcash)}</td><td>{row.transactionCount}</td>
                     <td><strong>{cash(row.bankPetty)}</strong>{row.bankPettyOverride != null && <small>Override</small>}</td>
                     <td>{cash(row.creditToBank)}</td><td>{cash(row.debitFromBank)}</td>
                     <td><strong>{cash(row.runningBankTotal)}</strong></td>
