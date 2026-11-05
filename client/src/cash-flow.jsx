@@ -16,12 +16,12 @@ const blank = { pettyCashOverride: "", bankPettyOverride: "", actual: "", credit
 const numberInput = (value) => value === null || value === undefined ? "" : String(value);
 const showMoney = (value) => value == null ? "—" : cash(value);
 const cashColumns = [
-  "Date", "Petty Cash", "Daily Income", "Cash", "GCash", "GCash Txns",
-  "Other Banks", "Cash + GCash", "Total Txns", "Expenses", "Expected Total",
+  "Date", "Petty Cash", "Daily Income", "Cash", "Cash Txn Ct", "GCash", "GCash Txns",
+  "Other Banks", "Total Txns", "Expenses", "Expected Total",
   "Actual", "Variance"
 ];
 const bankColumns = [
-  "Date", "Bank Petty", "Credit to Bank", "Debit from Bank", "Running Bank Total", "Note"
+  "Date", "Bank Balance", "Credit to Bank", "Debit from Bank", "Running Bank Total", "Note"
 ];
 
 export function CashFlow() {
@@ -152,7 +152,7 @@ export function CashFlow() {
               <input type="number" min="0" step="0.01" value={settings.defaultPettyCash} required
                 onChange={(event) => setSettings((previous) => ({ ...previous, defaultPettyCash: event.target.value }))} />
             </label>
-            <label className="field"><span>Bank Petty / Opening Balance</span>
+            <label className="field"><span>Bank Balance / Opening Balance</span>
               <input type="number" min="0" step="0.01" value={settings.defaultBankPetty} required
                 onChange={(event) => setSettings((previous) => ({ ...previous, defaultBankPetty: event.target.value }))} />
             </label>
@@ -167,7 +167,7 @@ export function CashFlow() {
               <label className="field"><span>Date</span><input type="date" value={entryDate}
                 onChange={(event) => setEntryDate(event.target.value)} required /></label>
               {field("Petty Cash Override", "pettyCashOverride", "Use default", true)}
-              {field("Bank Petty Override", "bankPettyOverride", "Carry forward", true)}
+              {field("Bank Balance Override", "bankPettyOverride", "Carry forward", true)}
               {field("Actual Cash Count", "actual", "Leave blank if not yet counted")}
               {field("Credit to Bank", "creditToBank", "0")}
               {field("Debit from Bank", "debitFromBank", "0")}
@@ -199,8 +199,8 @@ export function CashFlow() {
                     onClick={() => setEntryDate(row.date)} title={"Edit cash entry for " + row.date}>
                     <td><strong>{row.date}</strong></td>
                     <td>{cash(row.pettyCash)}</td><td>{cash(row.dailyIncome)}</td>
-                    <td>{cash(row.cash)}</td><td>{cash(row.gcash)}</td><td>{row.gcashTxns}</td>
-                    <td>{cash(row.other)}</td><td>{cash(row.cashPlusGcash)}</td><td>{row.transactionCount}</td>
+                    <td>{cash(row.cash)}</td><td>{row.cashTxns}</td><td>{cash(row.gcash)}</td><td>{row.gcashTxns}</td>
+                    <td>{cash(row.other)}</td><td>{row.transactionCount}</td>
                     <td>{cash(row.expenses)}</td><td><strong>{cash(row.expectedTotal)}</strong></td>
                     <td>{showMoney(row.actual)}</td>
                     <td className={row.variance == null ? "" : row.variance < 0 ? "cashflow-negative" : row.variance > 0 ? "cashflow-positive" : ""}>{showMoney(row.variance)}</td>
@@ -211,7 +211,7 @@ export function CashFlow() {
           </div>
         )}
         <p className="muted small cashflow-no-print">
-          Expected Total = Petty Cash + Daily Income − Expenses. Variance = Actual − Expected Total.
+          Expected Total = Petty Cash + Cash − Expenses. Variance = Actual − Expected Total.
         </p>
       </section>
       <section className="panel cashflow-ledger-panel cashflow-bank-panel">

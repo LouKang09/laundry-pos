@@ -92,7 +92,8 @@
   body.cashflow-printing .cashflow-table th:first-child,
   body.cashflow-printing .cashflow-table td:first-child{text-align:left}
   body.cashflow-printing .cashflow-income-table th:first-child{width:10%}
-  body.cashflow-printing .cashflow-income-table th:nth-child(6),
+  body.cashflow-printing .cashflow-income-table th:nth-child(5),
+  body.cashflow-printing .cashflow-income-table th:nth-child(7),
   body.cashflow-printing .cashflow-income-table th:nth-child(9){width:6%}
   body.cashflow-printing .cashflow-bank-panel{margin-top:9mm;break-before:auto}
   body.cashflow-printing .cashflow-bank-panel .cashflow-ledger-head{padding:0 0 3mm}

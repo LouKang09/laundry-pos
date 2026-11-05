@@ -41,7 +41,7 @@ export function calculateCashFlow({ from, to, zone, payments, expenses, entries,
     const e = entryByDay.get(date);
     const petty = e?.pettyCashOverride == null ? cents(defaultPettyCash) : cents(e.pettyCashOverride);
     const expensesTotal = expenseByDay.get(date) || 0;
-    const expected = petty + s.income - expensesTotal;
+    const expected = petty + s.cash - expensesTotal;
     const actual = e?.actual == null ? null : cents(e.actual);
     const bankOpening = e?.bankPettyOverride == null ? bankBalance : cents(e.bankPettyOverride);
     const credit = cents(e?.creditToBank);
