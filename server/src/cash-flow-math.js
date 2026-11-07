@@ -39,7 +39,15 @@ export function calculateCashFlow({ from, to, zone, payments, expenses, entries,
     const date = new Date(time).toISOString().slice(0, 10);
     const s = sales.get(date) || { income: 0, cash: 0, gcash: 0, other: 0, cashTxns: 0, gcashTxns: 0, otherTxns: 0, count: 0 };
     const e = entryByDay.get(date);
-    const petty = e?.pettyCashOverride == null ? cents(defaultPettyCash) : cents(e.pettyCashOverride);
+    // An explicit daily override always wins. Otherwise use the Actual from the
+    // preceding calendar day, falling back to the configured default when uncounted.
+    const pettyOverride = e?.pettyCashOverride == null ? null : cents(e.pettyCashOverride);
+    const previousDate = new Date(time - 86400000).toISOString().slice(0, 10);
+    const previousActual = entryByDay.get(previousDate)?.actual;
+    const pettySource = pettyOverride != null ? "override"
+      : previousActual != null ? "previous_actual" : "default";
+    const petty = pettyOverride != null ? pettyOverride
+      : previousActual != null ? cents(previousActual) : cents(defaultPettyCash);
     const expensesTotal = expenseByDay.get(date) || 0;
     const expected = petty + s.cash - expensesTotal;
     const actual = e?.actual == null ? null : cents(e.actual);
@@ -50,6 +58,8 @@ export function calculateCashFlow({ from, to, zone, payments, expenses, entries,
     rows.push({
       date,
       pettyCash: pesos(petty),
+      pettyCashSource: pettySource,
+      pettyCashPreviousDate: pettySource === "previous_actual" ? previousDate : null,
       pettyCashOverride: e?.pettyCashOverride == null ? null : Number(e.pettyCashOverride),
       dailyIncome: pesos(s.income),
       expenses: pesos(expensesTotal),

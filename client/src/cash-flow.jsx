@@ -15,6 +15,11 @@ const initialDay = localDay();
 const blank = { pettyCashOverride: "", bankPettyOverride: "", actual: "", creditToBank: "0", debitFromBank: "0", note: "" };
 const numberInput = (value) => value === null || value === undefined ? "" : String(value);
 const showMoney = (value) => value == null ? "—" : cash(value);
+const pettyCashExplanation = (row) => row.pettyCashSource === "override"
+  ? "Daily petty cash override"
+  : row.pettyCashSource === "previous_actual"
+    ? "Previous day's Actual (" + row.pettyCashPreviousDate + ")"
+    : "Default petty cash (no previous-day Actual)";
 const cashColumns = [
   "Date", "Petty Cash", "Daily Income", "Cash", "Cash Txn Ct", "GCash", "GCash Txns",
   "Other Banks", "Total Txns", "Expenses", "Expected Total",
@@ -146,7 +151,7 @@ export function CashFlow() {
       <div className="cashflow-forms cashflow-no-print">
         <section className="panel">
           <h2>Opening balances</h2>
-          <p className="muted small">Default petty cash applies to each day. The bank balance carries forward, including movements before the selected date range.</p>
+          <p className="muted small">Default petty cash applies when yesterday has no Actual count; a daily override takes priority. The bank balance carries forward, including movements before the selected date range.</p>
           <form onSubmit={saveSettings} className="cashflow-settings-grid">
             <label className="field"><span>Default Petty Cash</span>
               <input type="number" min="0" step="0.01" value={settings.defaultPettyCash} required
@@ -198,7 +203,7 @@ export function CashFlow() {
                   <tr key={row.date} className={row.date === entryDate ? "cashflow-selected" : ""}
                     onClick={() => setEntryDate(row.date)} title={"Edit cash entry for " + row.date}>
                     <td><strong>{row.date}</strong></td>
-                    <td>{cash(row.pettyCash)}</td><td>{cash(row.dailyIncome)}</td>
+                    <td title={pettyCashExplanation(row)}>{cash(row.pettyCash)}</td><td>{cash(row.dailyIncome)}</td>
                     <td>{cash(row.cash)}</td><td>{row.cashTxns}</td><td>{cash(row.gcash)}</td><td>{row.gcashTxns}</td>
                     <td>{cash(row.other)}</td><td>{row.transactionCount}</td>
                     <td>{cash(row.expenses)}</td><td><strong>{cash(row.expectedTotal)}</strong></td>
