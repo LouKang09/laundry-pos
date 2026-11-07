@@ -606,6 +606,58 @@ test("24 Admin can edit, audit, and soft-delete a transaction", async () => {
     items: [{ serviceId: piece.id, actualQuantity: "2", express: false }],
   }).expect(409);
 });
+
+test("24a Admin can correct speed on paid and processing orders without changing settled pricing", async () => {
+  const paid = (await call(staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }], { method: "CASH" })
+  ).expect(201)).body;
+  const paidItemId = paid.items[0].id;
+  const paidTotal = paid.total;
+  const paidLineTotal = paid.items[0].total;
+
+  const corrected = (await call(admin, ac, "put", "/orders/" + paid.id, {
+    customerName: paid.customerName, customerPhone: paid.customerPhone,
+    estimatedFrom: paid.estimatedFrom, estimatedTo: paid.estimatedTo,
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: true }],
+  }).expect(200)).body;
+  assert.equal(corrected.items[0].express, true);
+  assert.equal(corrected.items[0].id, paidItemId); // Preserve order-item identity.
+  assert.equal(corrected.items[0].total, paidLineTotal); // No retroactive express charge.
+  assert.equal(corrected.total, paidTotal);
+  assert.equal(corrected.payment.amount, paidTotal);
+  const auditDetail = (await admin.get("/api/orders/" + paid.id).expect(200)).body;
+  const correction = auditDetail.transactionHistory.find(e => e.action === "TRANSACTION_EDITED");
+  assert.equal(correction.metadata.before.items[0].express, false);
+  assert.equal(correction.metadata.after.items[0].express, true);
+  assert.equal(correction.metadata.after.total, paidTotal);
+
+  await call(admin, ac, "put", "/orders/" + paid.id, {
+    customerName: paid.customerName, customerPhone: paid.customerPhone,
+    items: [{ serviceId: piece.id, actualQuantity: "2", express: true }],
+  }).expect(409); // Still cannot change paid quantities.
+
+  const processing = (await call(staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }])
+  ).expect(201)).body;
+  await db.order.update({ where: { id: processing.id }, data: { status: "WASHING" } });
+  const processingCorrection = (await call(admin, ac, "put", "/orders/" + processing.id, {
+    customerName: processing.customerName, customerPhone: processing.customerPhone,
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: true }],
+  }).expect(200)).body;
+  assert.equal(processingCorrection.items[0].express, true);
+  assert.equal(processingCorrection.total, processing.total); // Processing locks prices even unpaid.
+
+  const unpaidNew = (await call(staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }])
+  ).expect(201)).body;
+  const repriced = (await call(admin, ac, "put", "/orders/" + unpaidNew.id, {
+    customerName: unpaidNew.customerName, customerPhone: unpaidNew.customerPhone,
+    items: [{ serviceId: piece.id, actualQuantity: "1", express: true }],
+  }).expect(200)).body;
+  assert.equal(repriced.items[0].express, true);
+  assert.equal(repriced.total, "250"); // Unpaid, unprocessed orders still reprice normally.
+  assert.equal(repriced.items[0].total, "250");
+});
 test("25 Admin can delete a user without a separate history view", async () => {
   const email = prefix + "-delete-user@example.test";
   const created = (await call(admin, ac, "post", "/admin/users", {

@@ -1361,6 +1361,7 @@ function TransactionEditor({ order, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const canEditLines = order.status === "RECEIVED" && order.paymentStatus === "UNPAID";
+  const canEditSpeed = order.status !== "CANCELLED";
   const [form, setForm] = useState(() => ({
     customerName: order.customerName || "",
     customerPhone: order.customerPhone || "",
@@ -1411,13 +1412,15 @@ function TransactionEditor({ order, onClose, onSaved }) {
           <Field label="Estimated pickup from" type="datetime-local" value={form.estimatedFrom} onChange={(e) => setField("estimatedFrom", e.target.value)} />
           <Field label="Estimated pickup to" type="datetime-local" value={form.estimatedTo} onChange={(e) => setField("estimatedTo", e.target.value)} />
         </div>
-        <div className="section-title"><h3>Services and quantities</h3><span className="muted small">{canEditLines ? "Editable before processing/payment" : "Locked after processing or payment"}</span></div>
-        {!canEditLines && <p className="muted small">Customer and pickup details can still be edited. Service quantities and total are locked to protect paid totals and inventory history.</p>}
+        <div className="section-title"><h3>Services, quantities and speed</h3><span className="muted small">{canEditLines ? "Editable before processing/payment" : "Speed corrections are available after processing/payment"}</span></div>
+        {canEditLines
+          ? <p className="muted small">Changing a load's speed recalculates its service price when you save.</p>
+          : <p className="muted small">Service and quantity changes are locked. You can correct the speed of each active load without changing its recorded price, paid total, or inventory history.</p>}
         {form.items.map((item, index) => (
           <div className="edit-line" key={index}>
             <label className="field"><span>Load {index + 1} · Service</span><select disabled={!canEditLines} value={item.serviceId} onChange={(e) => setLine(index, "serviceId", e.target.value)}>{(services || []).map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
             <Field label="Quantity" type="number" min="0.001" step="0.001" value={item.actualQuantity} disabled={!canEditLines} onChange={(e) => setLine(index, "actualQuantity", e.target.value)} required />
-            <label className="field"><span>Speed</span><select disabled={!canEditLines} value={item.express ? "EXPRESS" : "REGULAR"} onChange={(e) => setLine(index, "express", e.target.value === "EXPRESS")}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></label>
+            <label className="field"><span>Speed</span><select disabled={!canEditSpeed} value={item.express ? "EXPRESS" : "REGULAR"} onChange={(e) => setLine(index, "express", e.target.value === "EXPRESS")}><option value="REGULAR">Regular</option><option value="EXPRESS">Express</option></select></label>
             {canEditLines && <button type="button" className="icon" aria-label={"Remove load " + (index + 1)} disabled={form.items.length <= 1} onClick={() => setForm((old) => ({ ...old, items: old.items.filter((_, i) => i !== index) }))}><Trash2 size={17} /></button>}
             {canEditLines && <button type="button" className="secondary" disabled={form.items.length >= 30} onClick={() => setForm((old) => ({ ...old, items: [...old.items, { serviceId: item.serviceId, actualQuantity: "1", express: item.express }] }))}><Plus size={16} /> Another load</button>}
           </div>

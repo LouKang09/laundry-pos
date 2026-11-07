@@ -492,17 +492,24 @@ orders.put("/:id", admin, async (req, res) => {
       actualQuantity: String(i.actualQuantity),
       express: i.express,
     }));
-    const sortLines = (items) => items.sort((a, b) =>
-      a.serviceId.localeCompare(b.serviceId) ||
-      Number(a.express) - Number(b.express) ||
-      Number(a.actualQuantity) - Number(b.actualQuantity)
-    );
-    const changedLines = JSON.stringify(sortLines([...oldLines])) !== JSON.stringify(sortLines([...normalizedLines]));
-    if (changedLines && (old.status !== "RECEIVED" || old.paymentStatus !== "UNPAID"))
+    // Service/quantity changes require repricing and are only allowed before
+    // processing/payment. A speed-only correction on a locked order updates the
+    // flag in place, preserving charged rates, item IDs, stock and paid totals.
+    const compositionChanged = normalizedLines.length !== oldLines.length ||
+      normalizedLines.some((item, index) =>
+        item.serviceId !== oldLines[index]?.serviceId ||
+        !new D(item.actualQuantity).eq(oldLines[index].actualQuantity)
+      );
+    const speedChanged = normalizedLines.some((item, index) =>
+      item.express !== oldLines[index]?.express);
+    const changedLines = compositionChanged || speedChanged;
+    const pricingLocked = old.status !== "RECEIVED" || old.paymentStatus !== "UNPAID";
+    if (compositionChanged && pricingLocked)
       fail(409, "Services and quantities can only be changed before processing and payment");
-    let lines = old.items;
+    if (speedChanged && old.status === "CANCELLED")
+      fail(409, "Speed cannot be changed on a cancelled order");
     let total = old.total;
-    if (changedLines) {
+    if (changedLines && !pricingLocked) {
       const priced = [];
       for (const item of v.items) {
         priced.push(priceItem(await tx.service.findUnique({ where: { id: item.serviceId } }), item));
@@ -510,7 +517,15 @@ orders.put("/:id", admin, async (req, res) => {
       total = money([...priced, ...old.addons].reduce((sum, line) => sum.add(line.total), new D(0)));
       await tx.orderItem.deleteMany({ where: { orderId: old.id } });
       await tx.orderItem.createMany({ data: priced.map((line) => ({ ...line, orderId: old.id })) });
-      lines = priced;
+    } else if (speedChanged) {
+      for (let index = 0; index < old.items.length; index++) {
+        if (old.items[index].express !== normalizedLines[index].express) {
+          await tx.orderItem.update({
+            where: { id: old.items[index].id },
+            data: { express: normalizedLines[index].express },
+          });
+        }
+      }
     }
     const before = {
       customerName: old.customerName,
@@ -548,7 +563,7 @@ orders.put("/:id", admin, async (req, res) => {
         estimatedFrom: saved.estimatedFrom?.toISOString() || null,
         estimatedTo: saved.estimatedTo?.toISOString() || null,
         total: saved.total.toString(),
-        items: lines.map((i) => ({
+        items: saved.items.map((i) => ({
           serviceId: i.serviceId, serviceName: i.serviceName,
           actualQuantity: i.actualQuantity.toString(), express: i.express, total: i.total.toString(),
         })),
