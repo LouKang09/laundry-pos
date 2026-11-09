@@ -1,11 +1,8 @@
 // Browser-native vector PDF: sharp text and lines at any zoom level.
-// Uses A4 landscape for readable reports and keeps private data in the browser.
-const WIDTH = 841.89;
-const HEIGHT = 595.28;
+// Uses vector text and keeps private data in the browser. A3 is optional for wide ledgers.
 const LEFT = 42;
 const RIGHT = 42;
 const BOTTOM = 52;
-const TABLE_WIDTH = WIDTH - LEFT - RIGHT;
 const normalize = v => String(v ?? "").normalize("NFKD")
   .replace(/[\u0300-\u036f]/g, "")
   .replace(/[^\x20-\x7e]/g, "-");
@@ -41,7 +38,10 @@ function wrapText(value, maxWidth, size=10.5) {
   if(line)out.push(line);
   return out.length ? out : [""];
 }
-export function downloadPdf({title, subtitle, filename, sections=[]}) {
+export function downloadPdf({title, subtitle, filename, sections=[], pageSize="A4"}) {
+  const WIDTH = pageSize === "A3" ? 1190.55 : 841.89;
+  const HEIGHT = pageSize === "A3" ? 841.89 : 595.28;
+  const TABLE_WIDTH = WIDTH - LEFT - RIGHT;
   const pages=[];
   let commands=[], y=0, currentPage=0;
   const number = n => Number(n).toFixed(2);
@@ -73,9 +73,11 @@ export function downloadPdf({title, subtitle, filename, sections=[]}) {
     const starts=widths.map((_,i)=>LEFT+widths.slice(0,i).reduce((a,b)=>a+b,0));
     let rowIndex=0;
     const render=(values,header=false)=>{
-      const size=header?10.5:10.5, padding=9;
+      const size=header?(section.headerFontSize ?? 10.5):(section.fontSize ?? 10.5);
+      const padding=section.cellPadding ?? 9;
+      const lineHeight=section.lineHeight ?? 14;
       const multi=widths.map((w,i)=>wrapText(values[i] ?? "",Math.max(w-padding*2,18),size));
-      const rowHeight=Math.max(29,...multi.map(lines=>lines.length*14+15));
+      const rowHeight=Math.max(section.minRowHeight ?? 29,...multi.map(lines=>lines.length*lineHeight+15));
       // Keep the whole row together and repeat headings after page breaks.
       if(y+rowHeight>HEIGHT-BOTTOM){
         newPage();
@@ -84,7 +86,7 @@ export function downloadPdf({title, subtitle, filename, sections=[]}) {
       if(header)fillRect(LEFT,y,TABLE_WIDTH,rowHeight,[0.88,0.93,0.95]);
       else if(rowIndex++%2===0)fillRect(LEFT,y,TABLE_WIDTH,rowHeight,[0.965,0.976,0.982]);
       for(let i=0;i<multi.length;i++){
-        multi[i].forEach((line,k)=>draw(starts[i]+padding,y+19+k*14,line,size,header,[0.12,0.22,0.30]));
+        multi[i].forEach((line,k)=>draw(starts[i]+padding,y+19+k*lineHeight,line,size,header,[0.12,0.22,0.30]));
       }
       y+=rowHeight;rule(y);
     };

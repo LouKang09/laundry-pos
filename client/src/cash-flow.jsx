@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Printer, Save, RefreshCw } from "lucide-react";
+import { Printer, Save, RefreshCw, Download } from "lucide-react";
 import { api, put } from "./api";
 import { PageHead, ErrorBox, cash, Loading } from "./ui";
+import { downloadCashFlowPdf } from "./cash-flow-download";
 import "./cash-flow.css";
 
 function localDay(zone = "Asia/Manila") {
@@ -135,7 +136,16 @@ export function CashFlow() {
           onClick={() => setRevision((value) => value + 1)}>
           <RefreshCw size={17} /> Refresh
         </button>
-        <button type="button" className="primary cashflow-no-print" disabled={!data?.rows?.length} onClick={print}>
+        <button type="button" className="secondary cashflow-no-print"
+          disabled={loading || !data?.rows?.length || data.from !== from || data.to !== to}
+          onClick={() => {
+            setError("");
+            try { downloadCashFlowPdf(data); }
+            catch (err) { setError("Unable to download Cash Flow PDF: " + err.message); }
+          }}>
+          <Download size={17} /> Download Cash Flow
+        </button>
+        <button type="button" className="primary cashflow-no-print" disabled={loading || !data?.rows?.length} onClick={print}>
           <Printer size={17} /> Print Cash Flow
         </button>
       </PageHead>
