@@ -80,10 +80,13 @@ export function CashFlow() {
 
   const summary = useMemo(() => {
     const rows = data?.rows || [];
-    const total = (field) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0);
+    // Aggregate in integer cents to avoid precision drift across date ranges.
+    const total = (field) => rows.reduce((sum, row) =>
+      sum + Math.round(Number(row[field] || 0) * 100), 0) / 100;
     return {
-      income: total("dailyIncome"), expenses: total("expenses"),
-      variance: rows.reduce((sum, row) => sum + Number(row.variance || 0), 0),
+      income: total("dailyIncome"), cash: total("cash"),
+      gcash: total("gcash"), expenses: total("expenses"),
+      variance: total("variance"),
       counted: rows.filter((row) => row.actual != null).length,
       bank: rows.length ? rows[rows.length - 1].runningBankTotal : 0
     };
@@ -212,6 +215,25 @@ export function CashFlow() {
                   </tr>
                 ))}
               </tbody>
+              {!!data?.rows?.length && (
+                <tfoot>
+                  <tr className="cashflow-totals-row">
+                    <th scope="row">TOTAL</th>
+                    <td>—</td>
+                    <td><strong>{cash(summary.income)}</strong></td>
+                    <td><strong>{cash(summary.cash)}</strong></td>
+                    <td>—</td>
+                    <td><strong>{cash(summary.gcash)}</strong></td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td><strong>{cash(summary.expenses)}</strong></td>
+                    <td>—</td>
+                    <td>—</td>
+                    <td>—</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
