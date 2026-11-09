@@ -71,8 +71,8 @@ export function buildCashFlowPdfSections(data) {
 }
 
 export function downloadCashFlowPdf(data) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(data?.from || "") ||
-      !/^\\d{4}-\\d{2}-\\d{2}$/.test(data?.to || ""))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data?.from || "") ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(data?.to || ""))
     throw new Error("The selected report dates are invalid.");
   downloadPdf({
     pageSize: "A3",
