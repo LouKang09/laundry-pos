@@ -105,14 +105,16 @@ test('admin manual add allows multiple separate loads for the same service', asy
 });
 
 
-test('admin manual entry offers Pay at Pickup for an unclaimed historical order', async () => {
+test('admin manual entry offers separate Pay Upon Pickup and Pay Later options', async () => {
   const ui = userEvent.setup();
   mount(<AdminHistoricalOrder />);
   await screen.findByRole('button', {name: /Wash & Fold/});
-  expect(screen.getByRole('button', {name: /Pay at Pickup · Mark Ready/})).toBeTruthy();
   await ui.click(screen.getByRole('button', {name: /Pay at Pickup · Mark Ready/}));
-  expect(screen.getByRole('button', {name: /Pay at Pickup Save as unpaid/})).toBeTruthy();
-  expect(screen.getByText(/The order will be saved as unpaid/)).toBeTruthy();
+  expect(screen.getByRole('button', {name: /Pay Upon Pickup Payment required at claim/})).toBeTruthy();
+  expect(screen.getByText(/This order stays unpaid/)).toBeTruthy();
+  const payLater = screen.getByRole('button', {name: /Pay Later Claim now, settle afterward/});
+  await ui.click(payLater);
+  expect(screen.getByText(/Record the actual collection later/)).toBeTruthy();
 });
 
 test("stale CSRF transparently refreshes without creating duplicate orders or logging staff out", async () => {
