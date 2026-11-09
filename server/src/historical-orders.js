@@ -33,8 +33,13 @@ const historicalOrderSchema = z
       .max(30),
     addons: addonSchema,
     payment: paymentSchema.optional(),
+    paymentArrangement: z.enum(["PAY_ON_PICKUP", "PAY_LATER"]).default("PAY_ON_PICKUP"),
   })
   .strict()
+  .refine((v) => !v.payment || v.paymentArrangement !== "PAY_LATER", {
+    message: "Pay Later orders cannot be marked paid at creation",
+    path: ["paymentArrangement"],
+  })
   .refine((v) => v.status !== "CLAIMED" || !!v.payment, {
     message: "A claimed historical transaction must include payment",
     path: ["payment"],
@@ -118,6 +123,7 @@ historicalOrders.post("/historical", admin, async (req, res) => {
         userId: req.user.id,
         status: data.status,
         paymentStatus: data.payment ? "PAID" : "UNPAID",
+        paymentArrangement: data.paymentArrangement,
         total,
         estimatedFrom: estimatedFrom.toJSDate(),
         estimatedTo: estimatedTo.toJSDate(),

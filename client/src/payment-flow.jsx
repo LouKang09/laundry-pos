@@ -10,7 +10,8 @@ const METHODS = [
   { value: "CASH", icon: "₱", title: "Cash", note: "Pay in cash" },
   { value: "GCASH", icon: "G", title: "GCash", note: "QR or transfer" },
   { value: "OTHERS", icon: "▦", title: "Others", note: "Maya or bank transfer" },
-  { value: "UNPAID", icon: "⌛", title: "Pay at Pickup", note: "Save as unpaid" },
+  { value: "UNPAID", icon: "⌛", title: "Pay Upon Pickup", note: "Payment required at claim" },
+  { value: "PAY_LATER", icon: "↗", title: "Pay Later", note: "Claim now, settle afterward" },
 ];
 
 function readFile(file) {
@@ -66,15 +67,21 @@ export const OTHER_PROVIDERS = [
 ];
 export function paymentLabel(method, provider) {
   if (method === "OTHERS") return OTHER_PROVIDERS.find(p=>p.value===provider)?.label || "Others";
-  return method === "GCASH" ? "GCash" : method === "UNPAID" ? "Pay at Pickup" : "Cash";
+  return method === "GCASH" ? "GCash" : method === "UNPAID" ? "Pay Upon Pickup" : method === "PAY_LATER" ? "Pay Later" : "Cash";
+}
+export function isDeferredPayment(method) {
+  return method === "UNPAID" || method === "PAY_LATER";
+}
+export function paymentArrangementLabel(arrangement) {
+  return arrangement === "PAY_LATER" ? "Pay Later" : "Pay Upon Pickup";
 }
 export function validPaymentSelection(method, reference, provider) {
-  return method === "UNPAID" || method === "CASH" ||
+  return isDeferredPayment(method) || method === "CASH" ||
     ((method === "GCASH" || (method === "OTHERS" && OTHER_PROVIDERS.some(p=>p.value===provider))) &&
       String(reference || "").trim().length >= 3);
 }
 export function paymentPayload(method, reference, receiptDataUrl, provider = "MAYA") {
-  if (method === "UNPAID") return undefined;
+  if (isDeferredPayment(method)) return undefined;
   return {
     method,
     ...(method === "OTHERS" ? { provider } : {}),
@@ -180,7 +187,7 @@ export function PaymentMethodPicker({
   return (
     <>
       <div className={"water-payment-methods " + (!allowUnpaid ? "three" : "")}>
-        {METHODS.filter((item) => allowUnpaid || item.value !== "UNPAID").map(
+        {METHODS.filter((item) => allowUnpaid || !isDeferredPayment(item.value)).map(
           (item) => (
             <button
               type="button"
@@ -212,8 +219,13 @@ export function PaymentMethodPicker({
 
         {method === "UNPAID" && (
           <p className="water-payment-info water-payment-info-unpaid">
-            The order will be saved as unpaid and can be settled later from
-            Pickup or Order Details before it is claimed.
+            This order stays unpaid. Full payment is required before the laundry can be claimed.
+          </p>
+        )}
+        {method === "PAY_LATER" && (
+          <p className="water-payment-info water-payment-info-unpaid">
+            This order stays unpaid, but it can be claimed before payment.
+            Record the actual collection later from Order Details.
           </p>
         )}
 
@@ -383,8 +395,8 @@ export function PaymentDialog({
   const invalidPayment = !validPaymentSelection(method, reference, provider);
   const confirmLabel = isCorrection
     ? "Save payment correction"
-    : method === "UNPAID"
-      ? "Save as Unpaid"
+    : isDeferredPayment(method)
+      ? "Save · " + paymentLabel(method, provider)
       : "Confirm " + paymentLabel(method, provider) + " Payment";
 
   return (
@@ -424,7 +436,7 @@ export function PaymentDialog({
           onScanChange={setScanBusy}
         />
 
-        {showPaymentDateEditor && method !== "UNPAID" && (
+        {showPaymentDateEditor && !isDeferredPayment(method) && (
           <PaymentDateEditor
             value={paidAtLocal}
             onChange={setPaidAtLocal}
@@ -443,7 +455,7 @@ export function PaymentDialog({
           <button
             type="button"
             className="primary full"
-            disabled={busy || scanBusy || invalidPayment || (showPaymentDateEditor && method !== "UNPAID" &&
+            disabled={busy || scanBusy || invalidPayment || (showPaymentDateEditor && !isDeferredPayment(method) &&
               (!paidAtLocal || paidAtLocal > shopPaymentDateTime() ||
                 (earliestPaymentDate && paidAtLocal.slice(0, 10) < earliestPaymentDate)))}
             onClick={onConfirm}

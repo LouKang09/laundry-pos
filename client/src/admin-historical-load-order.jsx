@@ -18,7 +18,7 @@ import {
 } from "./ui";
 import { calculateLoadPricing, servicePlanText } from "./load-pricing";
 import { AddonsPicker } from "./addons-picker";
-import { PaymentMethodPicker, PaymentDateEditor, paymentPayload, validPaymentSelection } from "./payment-flow";
+import { PaymentMethodPicker, PaymentDateEditor, paymentPayload, validPaymentSelection, isDeferredPayment } from "./payment-flow";
 import { shopPaymentDateTime } from "./payment-date";
 
 const businessToday = () => {
@@ -80,7 +80,7 @@ export function AdminHistoricalOrder() {
     const item=addonCatalog?.find(x=>x.id===row.inventoryItemId);
     return sum.add(new Decimal(item?.salePrice||0).mul(row.quantity||0));
   },new Decimal(0)));
-  const claimedWithoutPayment = status === "CLAIMED" && payment === "UNPAID";
+  const claimedWithoutPayment = status === "CLAIMED" && isDeferredPayment(payment);
 
   // One service may have multiple independent loads; never merge them silently.
   function addService(service, selectedExpress = express) {
@@ -265,7 +265,7 @@ export function AdminHistoricalOrder() {
             <div className="section-title">
               <div>
                 <h3>Payment</h3>
-                <span className="muted">Cash, GCash, Others, or Pay at Pickup</span>
+                <span className="muted">Cash, GCash, Others, Pay Upon Pickup, or Pay Later</span>
               </div>
             </div>
             {status === "CLAIMED" && (
@@ -300,7 +300,7 @@ export function AdminHistoricalOrder() {
               allowUnpaid={status !== "CLAIMED"}
               onScanChange={setScanBusy}
             />
-            {payment !== "UNPAID" && (
+            {!isDeferredPayment(payment) && (
               <PaymentDateEditor
                 value={paidAtLocal}
                 onChange={setPaidAtLocal}
@@ -308,8 +308,8 @@ export function AdminHistoricalOrder() {
                 helpText="Enter the actual date and time the customer paid, even if payment was collected days after the laundry was received. Reports will use this payment date."
               />
             )}
-            {payment === "UNPAID" && (
-              <p className="small muted">No payment date is recorded yet. When the customer pays, open this order in Orders or Pickup, choose Receive Payment, and enter the actual payment date.</p>
+            {isDeferredPayment(payment) && (
+              <p className="small muted">No payment date is recorded yet. Use Order Details to record the actual collection. Pay Later can be claimed before payment.</p>
             )}
           </div>
           {claimedWithoutPayment && <ErrorBox message="Claimed historical transactions must be marked paid." />}
@@ -317,7 +317,7 @@ export function AdminHistoricalOrder() {
           <button
             className="primary full historical-save-button"
             disabled={busy || scanBusy || !historicalDate || !customer || !lines.length || claimedWithoutPayment || priced.some((line) => line.pricing.total.lte(0)) || !validPaymentSelection(payment, reference, provider) ||
-              (payment !== "UNPAID" && (!paidAtLocal || paidAtLocal > shopPaymentDateTime() ||
+              (!isDeferredPayment(payment) && (!paidAtLocal || paidAtLocal > shopPaymentDateTime() ||
                 paidAtLocal.slice(0,10) < historicalDate))}
             onClick={async () => {
               setBusy(true);
@@ -331,7 +331,8 @@ export function AdminHistoricalOrder() {
                   washingMachine: washingMachine.trim() || undefined,
                   items: lines.map(({ serviceId, actualQuantity, express }) => ({ serviceId, actualQuantity, express })),
                   addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
-                  ...(payment !== "UNPAID" ? {
+                  paymentArrangement: payment === "PAY_LATER" ? "PAY_LATER" : "PAY_ON_PICKUP",
+                  ...(!isDeferredPayment(payment) ? {
                     payment: { ...paymentPayload(payment, reference, receiptDataUrl, provider), paidAtLocal },
                   } : {}),
                 });

@@ -173,6 +173,7 @@ orders.post("/", async (req, res) => {
         washingMachine: data.washingMachine,
         userId: req.user.id,
         total,
+        paymentArrangement: data.paymentArrangement,
         estimatedFrom: from,
         estimatedTo: to,
         items: { create: lines },
@@ -362,6 +363,7 @@ orders.get("/scan/:token", async (req, res) => {
       washingMachine: true,
       status: true,
       paymentStatus: true,
+      paymentArrangement: true,
     },
   });
   if (!o || o.deletedAt) fail(404, "Order QR was not found");
@@ -371,7 +373,7 @@ orders.get("/scan/:token", async (req, res) => {
     ...o,
     nextStatus,
     blockedReason:
-      nextStatus === "CLAIMED" && o.paymentStatus !== "PAID"
+      nextStatus === "CLAIMED" && o.paymentStatus !== "PAID" && o.paymentArrangement !== "PAY_LATER"
         ? "Receive full payment before claiming this order."
         : null,
   });
@@ -592,6 +594,36 @@ orders.delete("/:id", admin, async (req, res) => {
   });
   res.json(result);
 });
+// An unpaid order's payment terms may be changed until it is claimed.
+orders.put("/:id/payment-arrangement", async (req, res) => {
+  if (!["ADMIN", "LAUNDRY_STAFF"].includes(req.user.role))
+    fail(403, "Only authorized POS users can change payment terms");
+  const { paymentArrangement } = z.object({
+    paymentArrangement: z.enum(["PAY_ON_PICKUP", "PAY_LATER"]),
+  }).strict().parse(req.body);
+  const saved = await atomic(async (tx) => {
+    const order = await getOrder(tx, req.params.id);
+    if (order.deletedAt || ["CANCELLED", "CLAIMED"].includes(order.status))
+      fail(409, "Only active unclaimed orders can change payment terms");
+    if (order.paymentStatus !== "UNPAID" || order.payment)
+      fail(409, "Paid transactions cannot change deferred payment terms");
+    if (order.paymentArrangement === paymentArrangement)
+      fail(400, "The payment arrangement is already selected");
+    const updated = await tx.order.update({
+      where: { id: order.id },
+      data: { paymentArrangement },
+    });
+    await audit(tx, req.user.id, "PAYMENT_ARRANGEMENT_CHANGED", "Order", order.id, {
+      before: order.paymentArrangement,
+      after: paymentArrangement,
+      paymentStatusUnchanged: "UNPAID",
+      amountUnchanged: order.total.toString(),
+    });
+    return getOrder(tx, updated.id);
+  });
+  res.json(saved);
+});
+
 // Correct the recorded tender type in place. This is an audited metadata correction,
 // not an additional collection, refund or change to the order total.
 orders.put("/:id/payment", async (req, res) => {
@@ -827,7 +859,7 @@ orders.post("/:id/status", async (req, res) => {
           o.status === "CANCELLED"
         )
           fail(409, "Follow the next laundry workflow stage");
-        if (status === "CLAIMED" && o.paymentStatus !== "PAID")
+        if (status === "CLAIMED" && o.paymentStatus !== "PAID" && o.paymentArrangement !== "PAY_LATER")
           fail(409, "Receive full payment before claiming");
         if (status === "WASHING") {
           selectedMachine = washingMachine || o.washingMachine;

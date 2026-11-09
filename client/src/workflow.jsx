@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { api, post } from "./api";
+import { paymentArrangementLabel } from "./payment-flow";
 import { useApp } from "./context";
 import {
   Badge,
@@ -1034,7 +1035,7 @@ export function OrderList({ mode = "orders", deletedOnly = false }) {
                   <td className="money">{cash(o.total)}</td>
                   <td>
                     <Badge value={o.paymentStatus} />
-                    <small>{o.payment?.provider || o.payment?.method || "—"}</small>
+                    <small>{o.payment?.provider || o.payment?.method || paymentArrangementLabel(o.paymentArrangement)}</small>
                     {mode === "transactions" && o.payment?.createdAt &&
                       <small>Paid: {date(o.payment.createdAt)}</small>}
                   </td>

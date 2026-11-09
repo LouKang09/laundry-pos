@@ -141,10 +141,15 @@ export const orderSchema = z
       .max(30),
     addons: addonSchema,
     payment: paymentSchema.optional(),
+    paymentArrangement: z.enum(["PAY_ON_PICKUP", "PAY_LATER"]).default("PAY_ON_PICKUP"),
     estimatedFrom: z.iso.datetime().optional(),
     estimatedTo: z.iso.datetime().optional(),
   })
   .strict()
+  .refine(v => !v.payment || v.paymentArrangement !== "PAY_LATER", {
+    message: "Pay Later orders cannot be marked paid at creation.",
+    path: ["paymentArrangement"],
+  })
   .refine(
     (v) =>
       (!v.estimatedFrom && !v.estimatedTo) ||

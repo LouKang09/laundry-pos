@@ -19,7 +19,7 @@ import {
 import Decimal from "decimal.js";
 import { api, post, put } from "./api";
 import { useApp } from "./context";
-import { PaymentDialog, paymentPayload, paymentLabel } from "./payment-flow";
+import { PaymentDialog, paymentPayload, paymentLabel, paymentArrangementLabel } from "./payment-flow";
 import { shopPaymentDateTime } from "./payment-date";
 import { customerDisplayName } from "./customer-display";
 import { PosReceiptPrint } from "./pos-receipt-print";
@@ -485,7 +485,8 @@ export function NewOrder() {
               value={payment}
               onChange={(e) => setPayment(e.target.value)}
             >
-              <option value="UNPAID">Unpaid · Pay at pickup</option>
+              <option value="UNPAID">Unpaid · Pay upon pickup</option>
+              <option value="PAY_LATER">Unpaid · Pay later</option>
               <option value="CASH">Paid · Cash</option>
               <option value="GCASH">Paid · GCash</option>
             </select>
@@ -509,7 +510,8 @@ export function NewOrder() {
                   requestKey: key,
                   customerId: customer.id,
                   items: lines,
-                  ...(payment !== "UNPAID"
+                  paymentArrangement: payment === "PAY_LATER" ? "PAY_LATER" : "PAY_ON_PICKUP",
+                  ...(!["UNPAID", "PAY_LATER"].includes(payment)
                     ? {
                         payment: {
                           method: payment,
@@ -632,7 +634,7 @@ export function OrderList({ mode = "orders", customerId, deletedOnly = false }) 
         </div>
         {mode === "pickup" && (
           <p className="muted">
-            Only paid orders at Ready can be claimed. A USB/Bluetooth QR scanner
+            Ready orders can be claimed once paid, or under Pay Later terms. A USB/Bluetooth QR scanner
             can enter the tracking link in search.
           </p>
         )}
@@ -683,7 +685,7 @@ export function OrderList({ mode = "orders", customerId, deletedOnly = false }) 
                   <td className="money">{cash(o.total)}</td>
                   <td>
                     <Badge value={o.paymentStatus} />
-                    <small>{o.payment?.method || "—"}</small>
+                    <small>{o.payment?.method || paymentArrangementLabel(o.paymentArrangement)}</small>
                   </td>
                   <td>
                     <Badge value={o.status} />
@@ -737,7 +739,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
     [paidAtLocal, setPaidAtLocal] = useState(""),
     [paymentReceiptDataUrl, setPaymentReceiptDataUrl] = useState(""),
     [paymentOpen, setPaymentOpen] = useState(false),
-     [paymentEditing, setPaymentEditing] = useState(false),
+    [paymentEditing, setPaymentEditing] = useState(false),
+    [arrangementDraft, setArrangementDraft] = useState("PAY_ON_PICKUP"),
     [receipt, setReceipt] = useState(null),
     [reason, setReason] = useState(""),
     [washingMachine, setWashingMachine] = useState(""),
@@ -775,6 +778,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
   // Received remains the earliest valid physical event.
   const earliestClaimTime = o ? shopPaymentDateTime(o.createdAt) : "";
   useEffect(() => setWashingMachine(o?.washingMachine || ""), [o?.washingMachine]);
+  useEffect(() => setArrangementDraft(o?.paymentArrangement || "PAY_ON_PICKUP"), [o?.id, o?.paymentArrangement]);
   return (
     <Modal title={o?.orderNumber || "Order details"} onClose={onClose} wide>
       <ErrorBox message={error || err} />
@@ -880,7 +884,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 <strong>
                   {o.payment
                     ? `${paymentLabel(o.payment.method, o.payment.provider)} · ${cash(o.payment.amount)} · ${date(o.payment.createdAt)}`
-                    : "Unpaid"}
+                    : paymentArrangementLabel(o.paymentArrangement) + " · Unpaid"}
                 </strong>
                 {o.payment?.receiptMime && (
                   <button
@@ -958,6 +962,33 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                       notify("Received date updated; the original is saved in transaction history.");
                     })}>
                     Save received date
+                  </button>
+                </div>
+              </div>
+            )}
+            {!o.deletedAt && o.status !== "CANCELLED" && o.status !== "CLAIMED" &&
+              o.paymentStatus === "UNPAID" && (
+              <div className="action-panel">
+                <h3>Payment arrangement</h3>
+                <p className="muted small">Change the arrangement while this order is unclaimed. No payment is collected by this change.</p>
+                <div className="actions">
+                  <label className="field">
+                    <span>Payment terms</span>
+                    <select aria-label="Payment arrangement" disabled={busy}
+                      value={arrangementDraft} onChange={(e) => setArrangementDraft(e.target.value)}>
+                      <option value="PAY_ON_PICKUP">Pay Upon Pickup</option>
+                      <option value="PAY_LATER">Pay Later</option>
+                    </select>
+                  </label>
+                  <button type="button" className="primary"
+                    disabled={busy || arrangementDraft === (o.paymentArrangement || "PAY_ON_PICKUP")}
+                    onClick={() => action(async () => {
+                      await put("/orders/" + id + "/payment-arrangement", {
+                        paymentArrangement: arrangementDraft,
+                      });
+                      notify("Payment arrangement updated");
+                    })}>
+                    Save arrangement
                   </button>
                 </div>
               </div>
@@ -1104,7 +1135,8 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                 )}
               </div>
             )}
-            {!o.deletedAt && o.status !== "CANCELLED" && o.status !== "CLAIMED" && (
+            {!o.deletedAt && o.status !== "CANCELLED" &&
+              (o.status !== "CLAIMED" || (o.paymentStatus === "UNPAID" && o.paymentArrangement === "PAY_LATER")) && (
               <div className="action-panel">
                 {o.paymentStatus === "UNPAID" && (
                   <div>
@@ -1150,7 +1182,9 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                       </h3>
                       {next === "CLAIMED" && o.paymentStatus === "UNPAID" && (
                         <p className="muted">
-                          Payment is required before claiming.
+                          {o.paymentArrangement === "PAY_LATER"
+                            ? "Pay Later: this order can be claimed now; the outstanding balance remains due."
+                            : "Payment is required before claiming."}
                         </p>
                       )}
                     </div>
@@ -1158,7 +1192,7 @@ export function OrderDetail({ id, onClose, onChanged = () => {} }) {
                       className="primary"
                       disabled={
                         busy ||
-                        (next === "CLAIMED" && o.paymentStatus !== "PAID") ||
+                        (next === "CLAIMED" && o.paymentStatus !== "PAID" && o.paymentArrangement !== "PAY_LATER") ||
                         (next === "WASHING" && !washingMachine.trim())
                       }
                       onClick={() =>

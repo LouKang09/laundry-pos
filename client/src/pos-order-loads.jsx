@@ -300,6 +300,7 @@ export function PosOrder() {
               addons: addons.map(({inventoryItemId,quantity})=>({inventoryItemId,quantity})),
               washingMachine: washingMachine.trim() || undefined,
               ...(selectedPayment ? { payment: selectedPayment } : {}),
+              paymentArrangement: payment === "PAY_LATER" ? "PAY_LATER" : "PAY_ON_PICKUP",
               ...(from ? { estimatedFrom: new Date(from).toISOString() } : {}),
               ...(to ? { estimatedTo: new Date(to).toISOString() } : {}),
             });

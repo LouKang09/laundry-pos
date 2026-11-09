@@ -658,7 +658,69 @@ test("24a Admin can correct speed on paid and processing orders without changing
   assert.equal(repriced.total, "250"); // Unpaid, unprocessed orders still reprice normally.
   assert.equal(repriced.items[0].total, "250");
 });
-test("25 Admin can delete a user without a separate history view", async () => {
+test("24b Pay Later terms can be changed on existing unclaimed orders, claimed, then settled", async () => {
+  const existing = (await call(staff, sc, "post", "/orders",
+    orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }])
+  ).expect(201)).body;
+  assert.equal(existing.paymentArrangement, "PAY_ON_PICKUP");
+  assert.equal(existing.paymentStatus, "UNPAID");
+  const originalTotal = existing.total;
+
+  const changed = (await call(staff, sc, "put", "/orders/" + existing.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_LATER",
+  }).expect(200)).body;
+  assert.equal(changed.paymentArrangement, "PAY_LATER");
+  assert.equal(changed.total, originalTotal);
+  assert.equal(changed.payment, null);
+  const events = (await admin.get("/api/orders/" + existing.id).expect(200)).body.transactionHistory;
+  assert(events.some(e => e.action === "PAYMENT_ARRANGEMENT_CHANGED"
+    && e.metadata.before === "PAY_ON_PICKUP" && e.metadata.after === "PAY_LATER"));
+
+  await call(admin, ac, "put", "/orders/" + existing.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_ON_PICKUP",
+  }).expect(200);
+  await db.order.update({ where: { id: existing.id }, data: { status: "READY" } });
+  await call(staff, sc, "post", "/orders/" + existing.id + "/status", { status: "CLAIMED" }).expect(409);
+
+  await call(admin, ac, "put", "/orders/" + existing.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_LATER",
+  }).expect(200);
+  const claimed = (await call(staff, sc, "post", "/orders/" + existing.id + "/status", {
+    status: "CLAIMED",
+  }).expect(200)).body;
+  assert.equal(claimed.paymentStatus, "UNPAID");
+  assert.equal(claimed.paymentArrangement, "PAY_LATER");
+  assert.equal(claimed.total, originalTotal);
+  assert.equal(await db.payment.count({ where: { orderId: existing.id } }), 0);
+  await call(admin, ac, "put", "/orders/" + existing.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_ON_PICKUP",
+  }).expect(409);
+  const settled = (await call(staff, sc, "post", "/orders/" + existing.id + "/payment", {
+    method: "CASH",
+  }).expect(200)).body;
+  assert.equal(settled.paymentStatus, "PAID");
+  assert.equal(settled.payment.amount, originalTotal);
+  assert.equal(await db.payment.count({ where: { orderId: existing.id } }), 1);
+
+  const deferred = (await call(staff, sc, "post", "/orders", {
+    ...orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }]),
+    paymentArrangement: "PAY_LATER",
+  }).expect(201)).body;
+  assert.equal(deferred.paymentArrangement, "PAY_LATER");
+  assert.equal(deferred.paymentStatus, "UNPAID");
+  await call(staff, sc, "put", "/orders/" + deferred.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_ON_PICKUP",
+  }).expect(200);
+  await call(staff, sc, "post", "/orders", {
+    ...orderBody([{ serviceId: piece.id, actualQuantity: "1", express: false }], { method: "CASH" }),
+    paymentArrangement: "PAY_LATER",
+  }).expect(400);
+  await call(staff, sc, "put", "/orders/" + settled.id + "/payment-arrangement", {
+    paymentArrangement: "PAY_ON_PICKUP",
+  }).expect(409);
+});
+
+test("25 Admin can delete a user without a separate history view", async () {
   const email = prefix + "-delete-user@example.test";
   const created = (await call(admin, ac, "post", "/admin/users", {
     name: "Disposable User", email, password,
