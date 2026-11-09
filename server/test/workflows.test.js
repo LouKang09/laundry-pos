@@ -720,7 +720,7 @@ test("24b Pay Later terms can be changed on existing unclaimed orders, claimed, 
   }).expect(409);
 });
 
-test("25 Admin can delete a user without a separate history view", async () {
+test("25 Admin can delete a user without a separate history view", async () => {
   const email = prefix + "-delete-user@example.test";
   const created = (await call(admin, ac, "post", "/admin/users", {
     name: "Disposable User", email, password,
